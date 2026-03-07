@@ -39,9 +39,9 @@ export type Result = { 'ok' : bigint } |
   { 'err' : string };
 export type Result_1 = { 'ok' : null } |
   { 'err' : string };
-export type Result_2 = { 'ok' : WebhookConfig } |
+export type Result_2 = { 'ok' : PublicUser } |
   { 'err' : string };
-export type Result_3 = { 'ok' : PublicUser } |
+export type Result_3 = { 'ok' : WebhookConfig } |
   { 'err' : string };
 export type Result_4 = { 'ok' : Array<PublicUser> } |
   { 'err' : string };
@@ -99,17 +99,13 @@ export interface _SERVICE {
   'getAllUsers' : ActorMethod<[], Result_4>,
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
-  'getCurrentUser' : ActorMethod<[], Result_3>,
+  'getCurrentUser' : ActorMethod<[], Result_2>,
   'getPunishmentLogCount' : ActorMethod<[], bigint>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
-  'getWebhookConfig' : ActorMethod<[], Result_2>,
+  'getWebhookConfig' : ActorMethod<[], Result_3>,
   'initializeBackend' : ActorMethod<[string], undefined>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
-  'login' : ActorMethod<
-    [string, string],
-    { 'ok' : string } |
-      { 'err' : string }
-  >,
+  'login' : ActorMethod<[string, string], Result_2>,
   'logout' : ActorMethod<[], Result_1>,
   'promoteUser' : ActorMethod<[Principal, Role], Result_1>,
   'removeStaffAccount' : ActorMethod<[Principal], Result_1>,

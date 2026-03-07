@@ -1,5 +1,5 @@
 import { Toaster } from "@/components/ui/sonner";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { PublicUser } from "./backend.d";
 import { Layout } from "./components/Layout";
 import { useActor } from "./hooks/useActor";
@@ -12,47 +12,43 @@ import { PunishmentMatrixPage } from "./pages/PunishmentMatrixPage";
 import { StaffConductPage } from "./pages/StaffConductPage";
 import { StaffLogsPage } from "./pages/StaffLogsPage";
 
-export default function App() {
-  const { actor, isFetching } = useActor();
-  const [currentUser, setCurrentUser] = useState<PublicUser | null>(null);
-  const [activePage, setActivePage] = useState("dashboard");
-  const [authChecked, setAuthChecked] = useState(false);
+const SESSION_KEY = "staff_session";
 
-  // Check if user is already logged in on mount
-  useEffect(() => {
-    if (!actor || isFetching) return;
-    actor
-      .getCurrentUser()
-      .then((result) => {
-        if (result.__kind__ === "ok") {
-          setCurrentUser(result.ok);
-        }
-      })
-      .catch(() => {
-        // Not logged in
-      })
-      .finally(() => {
-        setAuthChecked(true);
-      });
-  }, [actor, isFetching]);
+function loadSessionFromStorage(): PublicUser | null {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as PublicUser;
+  } catch {
+    return null;
+  }
+}
+
+export default function App() {
+  const { isFetching } = useActor();
+  const [currentUser, setCurrentUser] = useState<PublicUser | null>(() =>
+    loadSessionFromStorage(),
+  );
+  const [activePage, setActivePage] = useState("dashboard");
 
   const handleLogin = (user: PublicUser) => {
+    localStorage.setItem(
+      SESSION_KEY,
+      JSON.stringify(user, (_, v) =>
+        typeof v === "bigint" ? v.toString() : v,
+      ),
+    );
     setCurrentUser(user);
     setActivePage("dashboard");
   };
 
   const handleLogout = async () => {
-    if (!actor) return;
-    try {
-      await actor.logout();
-    } catch {
-      // Ignore logout errors
-    }
+    localStorage.removeItem(SESSION_KEY);
     setCurrentUser(null);
   };
 
-  // Show loading spinner while checking auth
-  if (!authChecked || isFetching) {
+  // Show loading spinner while the actor/canister connection is being established
+  if (isFetching) {
     return (
       <div
         className="min-h-screen flex items-center justify-center"

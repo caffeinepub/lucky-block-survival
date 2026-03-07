@@ -82,12 +82,12 @@ export const UserProfile = IDL.Record({
   'role' : Role,
   'discordUsername' : IDL.Text,
 });
-export const Result_3 = IDL.Variant({ 'ok' : PublicUser, 'err' : IDL.Text });
+export const Result_2 = IDL.Variant({ 'ok' : PublicUser, 'err' : IDL.Text });
 export const WebhookConfig = IDL.Record({
   'loaWebhookUrl' : IDL.Text,
   'punishmentWebhookUrl' : IDL.Text,
 });
-export const Result_2 = IDL.Variant({ 'ok' : WebhookConfig, 'err' : IDL.Text });
+export const Result_3 = IDL.Variant({ 'ok' : WebhookConfig, 'err' : IDL.Text });
 export const Result = IDL.Variant({ 'ok' : IDL.Nat, 'err' : IDL.Text });
 
 export const idlService = IDL.Service({
@@ -111,21 +111,17 @@ export const idlService = IDL.Service({
   'getAllUsers' : IDL.Func([], [Result_4], ['query']),
   'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
-  'getCurrentUser' : IDL.Func([], [Result_3], ['query']),
+  'getCurrentUser' : IDL.Func([], [Result_2], ['query']),
   'getPunishmentLogCount' : IDL.Func([], [IDL.Nat], ['query']),
   'getUserProfile' : IDL.Func(
       [IDL.Principal],
       [IDL.Opt(UserProfile)],
       ['query'],
     ),
-  'getWebhookConfig' : IDL.Func([], [Result_2], ['query']),
+  'getWebhookConfig' : IDL.Func([], [Result_3], ['query']),
   'initializeBackend' : IDL.Func([IDL.Text], [], []),
   'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
-  'login' : IDL.Func(
-      [IDL.Text, IDL.Text],
-      [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
-      [],
-    ),
+  'login' : IDL.Func([IDL.Text, IDL.Text], [Result_2], []),
   'logout' : IDL.Func([], [Result_1], []),
   'promoteUser' : IDL.Func([IDL.Principal, Role], [Result_1], []),
   'removeStaffAccount' : IDL.Func([IDL.Principal], [Result_1], []),
@@ -217,12 +213,12 @@ export const idlFactory = ({ IDL }) => {
     'role' : Role,
     'discordUsername' : IDL.Text,
   });
-  const Result_3 = IDL.Variant({ 'ok' : PublicUser, 'err' : IDL.Text });
+  const Result_2 = IDL.Variant({ 'ok' : PublicUser, 'err' : IDL.Text });
   const WebhookConfig = IDL.Record({
     'loaWebhookUrl' : IDL.Text,
     'punishmentWebhookUrl' : IDL.Text,
   });
-  const Result_2 = IDL.Variant({ 'ok' : WebhookConfig, 'err' : IDL.Text });
+  const Result_3 = IDL.Variant({ 'ok' : WebhookConfig, 'err' : IDL.Text });
   const Result = IDL.Variant({ 'ok' : IDL.Nat, 'err' : IDL.Text });
   
   return IDL.Service({
@@ -246,21 +242,17 @@ export const idlFactory = ({ IDL }) => {
     'getAllUsers' : IDL.Func([], [Result_4], ['query']),
     'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
     'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
-    'getCurrentUser' : IDL.Func([], [Result_3], ['query']),
+    'getCurrentUser' : IDL.Func([], [Result_2], ['query']),
     'getPunishmentLogCount' : IDL.Func([], [IDL.Nat], ['query']),
     'getUserProfile' : IDL.Func(
         [IDL.Principal],
         [IDL.Opt(UserProfile)],
         ['query'],
       ),
-    'getWebhookConfig' : IDL.Func([], [Result_2], ['query']),
+    'getWebhookConfig' : IDL.Func([], [Result_3], ['query']),
     'initializeBackend' : IDL.Func([IDL.Text], [], []),
     'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
-    'login' : IDL.Func(
-        [IDL.Text, IDL.Text],
-        [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
-        [],
-      ),
+    'login' : IDL.Func([IDL.Text, IDL.Text], [Result_2], []),
     'logout' : IDL.Func([], [Result_1], []),
     'promoteUser' : IDL.Func([IDL.Principal, Role], [Result_1], []),
     'removeStaffAccount' : IDL.Func([IDL.Principal], [Result_1], []),

@@ -9,7 +9,7 @@ export interface None {
 export type Option<T> = Some<T> | None;
 export type Result_2 = {
     __kind__: "ok";
-    ok: WebhookConfig;
+    ok: PublicUser;
 } | {
     __kind__: "err";
     err: string;
@@ -72,7 +72,7 @@ export type Result = {
 };
 export type Result_3 = {
     __kind__: "ok";
-    ok: PublicUser;
+    ok: WebhookConfig;
 } | {
     __kind__: "err";
     err: string;
@@ -139,19 +139,13 @@ export interface backendInterface {
     getAllUsers(): Promise<Result_4>;
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
-    getCurrentUser(): Promise<Result_3>;
+    getCurrentUser(): Promise<Result_2>;
     getPunishmentLogCount(): Promise<bigint>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
-    getWebhookConfig(): Promise<Result_2>;
+    getWebhookConfig(): Promise<Result_3>;
     initializeBackend(didSeed: string): Promise<void>;
     isCallerAdmin(): Promise<boolean>;
-    login(username: string, password: string): Promise<{
-        __kind__: "ok";
-        ok: string;
-    } | {
-        __kind__: "err";
-        err: string;
-    }>;
+    login(username: string, password: string): Promise<Result_2>;
     logout(): Promise<Result_1>;
     promoteUser(userPrincipal: Principal, newRole: Role): Promise<Result_1>;
     removeStaffAccount(userPrincipal: Principal): Promise<Result_1>;

@@ -29,16 +29,9 @@ export function LoginPage({ onLogin }: LoginPageProps) {
       const loginResult = await actor.login(username, hashedPassword);
       if (loginResult.__kind__ === "err") {
         setError("Invalid credentials. Access denied.");
-        setLoading(false);
         return;
       }
-      const userResult = await actor.getCurrentUser();
-      if (userResult.__kind__ === "err") {
-        setError("Failed to fetch user data. Try again.");
-        setLoading(false);
-        return;
-      }
-      onLogin(userResult.ok);
+      onLogin(loginResult.ok);
     } catch {
       setError("Connection error. Please try again.");
     } finally {
