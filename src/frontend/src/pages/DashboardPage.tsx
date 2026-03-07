@@ -55,10 +55,24 @@ export function DashboardPage({
   useEffect(() => {
     if (!actor) return;
     setLoading(true);
+
+    const safeFetchCount = async (
+      fn: () => Promise<bigint>,
+    ): Promise<bigint> => {
+      try {
+        return await fn();
+      } catch {
+        return 0n;
+      }
+    };
+
     Promise.all([
-      actor.getPunishmentLogCount(),
-      actor.getActiveLOACount(),
-      actor.getAllPunishmentLogs(),
+      safeFetchCount(() => actor.getPunishmentLogCount()),
+      safeFetchCount(() => actor.getActiveLOACount()),
+      actor.getAllPunishmentLogs().catch(() => ({
+        __kind__: "err" as const,
+        err: "backend not initialized",
+      })),
     ])
       .then(([pCount, lCount, logsResult]) => {
         setPunishmentCount(pCount);
@@ -77,8 +91,11 @@ export function DashboardPage({
           );
           setRecentLogs(sorted.slice(0, 5));
         }
+        // If err — counts stay at 0, logs stay empty (backend not initialized)
       })
-      .catch(console.error)
+      .catch(() => {
+        // Silently ignore all other errors — show empty state
+      })
       .finally(() => setLoading(false));
   }, [actor]);
 

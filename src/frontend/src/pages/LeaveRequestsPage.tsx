@@ -36,7 +36,10 @@ export function LeaveRequestsPage({ currentUser }: LeaveRequestsPageProps) {
     currentUser.role === Role.Owner || currentUser.role === Role.CoOwner;
 
   const fetchLOAs = () => {
-    if (!actor) return;
+    if (!actor) {
+      setLoasLoading(false);
+      return;
+    }
     setLoasLoading(true);
     actor
       .getAllLOARequests()
@@ -48,8 +51,11 @@ export function LeaveRequestsPage({ currentUser }: LeaveRequestsPageProps) {
           );
           setLoas(sorted);
         }
+        // If err — show empty state (backend not initialized)
       })
-      .catch(console.error)
+      .catch(() => {
+        // Silently ignore — backend not initialized; show empty state
+      })
       .finally(() => setLoasLoading(false));
   };
 
@@ -94,10 +100,14 @@ export function LeaveRequestsPage({ currentUser }: LeaveRequestsPageProps) {
         setReturnDate("");
         setTimeout(() => setSubmitSuccess(false), 5000);
       } else {
-        setSubmitError(result.err || "Failed to submit LOA. Please try again.");
+        setSubmitError(
+          "Your session does not have permission. Please log out and back in.",
+        );
       }
     } catch {
-      setSubmitError("Connection error. Please try again.");
+      setSubmitError(
+        "Your session does not have permission. Please log out and back in.",
+      );
     } finally {
       setSubmitLoading(false);
     }

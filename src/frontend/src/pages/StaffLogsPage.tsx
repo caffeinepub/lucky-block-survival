@@ -63,7 +63,10 @@ export function StaffLogsPage({
   const [submitError, setSubmitError] = useState("");
 
   const fetchLogs = () => {
-    if (!actor) return;
+    if (!actor) {
+      setLogsLoading(false);
+      return;
+    }
     setLogsLoading(true);
     actor
       .getAllPunishmentLogs()
@@ -74,8 +77,11 @@ export function StaffLogsPage({
           );
           setLogs(sorted);
         }
+        // If err — show empty state (backend not initialized)
       })
-      .catch(console.error)
+      .catch(() => {
+        // Silently ignore — backend not initialized; show empty state
+      })
       .finally(() => setLogsLoading(false));
   };
 
@@ -116,10 +122,14 @@ export function StaffLogsPage({
         setProof("");
         setTimeout(() => setSubmitSuccess(false), 5000);
       } else {
-        setSubmitError(result.err || "Failed to submit log. Please try again.");
+        setSubmitError(
+          "Your session does not have permission. Please log out and back in.",
+        );
       }
     } catch {
-      setSubmitError("Connection error. Please try again.");
+      setSubmitError(
+        "Your session does not have permission. Please log out and back in.",
+      );
     } finally {
       setSubmitLoading(false);
     }

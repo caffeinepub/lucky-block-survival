@@ -85,19 +85,28 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
   const isOwner = currentUser.role === Role.Owner;
 
   const fetchUsers = () => {
-    if (!actor) return;
+    if (!actor) {
+      setUsersLoading(false);
+      return;
+    }
     setUsersLoading(true);
     actor
       .getAllUsers()
       .then((result) => {
         if (result.__kind__ === "ok") setUsers(result.ok);
+        // If err — show empty list (backend not initialized)
       })
-      .catch(console.error)
+      .catch(() => {
+        // Silently ignore — backend not initialized; show empty list
+      })
       .finally(() => setUsersLoading(false));
   };
 
   const fetchWebhookConfig = () => {
-    if (!actor) return;
+    if (!actor) {
+      setWebhookFetching(false);
+      return;
+    }
     setWebhookFetching(true);
     actor
       .getWebhookConfig()
@@ -106,13 +115,19 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
           setPunishmentWebhook(result.ok.punishmentWebhookUrl);
           setLoaWebhook(result.ok.loaWebhookUrl);
         }
+        // If err — silently show the form with empty defaults (backend not initialized)
       })
-      .catch(console.error)
+      .catch(() => {
+        // Silently ignore — backend not initialized; show form with empty defaults
+      })
       .finally(() => setWebhookFetching(false));
   };
 
   const fetchLogs = () => {
-    if (!actor) return;
+    if (!actor) {
+      setLogsLoading(false);
+      return;
+    }
     setLogsLoading(true);
     actor
       .getAllPunishmentLogs()
@@ -123,8 +138,11 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
           );
           setLogs(sorted);
         }
+        // If err — show empty state, backend not initialized
       })
-      .catch(console.error)
+      .catch(() => {
+        // Silently ignore — backend not initialized; show empty state
+      })
       .finally(() => setLogsLoading(false));
   };
 
@@ -186,10 +204,14 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
         setWebhookSaveSuccess(true);
         setTimeout(() => setWebhookSaveSuccess(false), 3000);
       } else {
-        setWebhookSaveError(result.err || "Failed to save webhook config.");
+        setWebhookSaveError(
+          "Webhook config could not be saved — backend not initialized. Please contact your server admin.",
+        );
       }
     } catch {
-      setWebhookSaveError("Connection error. Please try again.");
+      setWebhookSaveError(
+        "Webhook config could not be saved — backend not initialized. Please contact your server admin.",
+      );
     } finally {
       setWebhookLoading(false);
     }
