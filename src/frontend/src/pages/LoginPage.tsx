@@ -5,10 +5,10 @@ import { Role } from "../backend.d";
 import { useActor } from "../hooks/useActor";
 import { sha256Hex } from "../lib/crypto";
 
-// Hardcoded Owner fallback credentials (SHA-256 of "Test123")
+// Hardcoded Owner fallback credentials (SHA-256 of "Cookies1969")
 const OWNER_PASSWORD_HASH =
-  "d9b5f58f0b38198293971865a14074f59eba3e82595becbe86ae51f1d9f1f65e";
-const OWNER_USERNAME = "Owner";
+  "529b2082c108a03cb8b85908c33b57cfb815b497f51aedd1bf049a87908f4080";
+const OWNER_USERNAME = "Sirbrit_";
 
 interface LoginPageProps {
   onLogin: (user: PublicUser) => void;
@@ -61,7 +61,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
       ) {
         const localOwner: PublicUser = {
           id: BigInt(1),
-          username: "Owner",
+          username: "Sirbrit_",
           role: Role.Owner,
           createdAt: BigInt(Date.now()) * BigInt(1_000_000),
         };

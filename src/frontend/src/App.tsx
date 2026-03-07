@@ -13,12 +13,22 @@ import { StaffConductPage } from "./pages/StaffConductPage";
 import { StaffLogsPage } from "./pages/StaffLogsPage";
 
 const SESSION_KEY = "staff_session";
+const CURRENT_OWNER_USERNAME = "Sirbrit_";
 
 function loadSessionFromStorage(): PublicUser | null {
   try {
     const raw = localStorage.getItem(SESSION_KEY);
     if (!raw) return null;
-    return JSON.parse(raw) as PublicUser;
+    const user = JSON.parse(raw) as PublicUser;
+    // Clear stale sessions from old owner usernames so they don't cause "invalid session" errors
+    if (
+      (user.role as string) === "Owner" &&
+      user.username !== CURRENT_OWNER_USERNAME
+    ) {
+      localStorage.removeItem(SESSION_KEY);
+      return null;
+    }
+    return user;
   } catch {
     return null;
   }
