@@ -1,9 +1,14 @@
 import { CalendarPlus, Clock, FileText, Gavel, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
-import type { PublicUser, PunishmentLog } from "../backend.d";
+import type { PublicUser } from "../backend.d";
 import { Role } from "../backend.d";
 import { StatCard } from "../components/StatCard";
-import { useActor } from "../hooks/useActor";
+import {
+  type LocalPunishmentLog,
+  getActiveLOACount,
+  getAllPunishmentLogs,
+  getPunishmentLogCount,
+} from "../lib/portalData";
 
 function getRoleDisplayName(role: Role): string {
   switch (role) {
@@ -27,9 +32,8 @@ function getRoleBadgeClass(role: Role): string {
   }
 }
 
-function formatTimestamp(ts: bigint): string {
-  const ms = Number(ts) / 1_000_000;
-  return new Date(ms).toLocaleDateString("en-US", {
+function formatTimestamp(ts: number): string {
+  return new Date(ts).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -45,59 +49,27 @@ export function DashboardPage({
   currentUser,
   setActivePage,
 }: DashboardPageProps) {
-  const { actor } = useActor();
-  const [punishmentCount, setPunishmentCount] = useState<bigint>(0n);
-  const [loaCount, setLoaCount] = useState<bigint>(0n);
-  const [recentLogs, setRecentLogs] = useState<PunishmentLog[]>([]);
+  const [punishmentCount, setPunishmentCount] = useState<number>(0);
+  const [loaCount, setLoaCount] = useState<number>(0);
+  const [recentLogs, setRecentLogs] = useState<LocalPunishmentLog[]>([]);
   const [recentCount, setRecentCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!actor) return;
     setLoading(true);
+    try {
+      const allLogs = getAllPunishmentLogs();
+      setPunishmentCount(getPunishmentLogCount());
+      setLoaCount(getActiveLOACount());
 
-    const safeFetchCount = async (
-      fn: () => Promise<bigint>,
-    ): Promise<bigint> => {
-      try {
-        return await fn();
-      } catch {
-        return 0n;
-      }
-    };
-
-    Promise.all([
-      safeFetchCount(() => actor.getPunishmentLogCount()),
-      safeFetchCount(() => actor.getActiveLOACount()),
-      actor.getAllPunishmentLogs().catch(() => ({
-        __kind__: "err" as const,
-        err: "backend not initialized",
-      })),
-    ])
-      .then(([pCount, lCount, logsResult]) => {
-        setPunishmentCount(pCount);
-        setLoaCount(lCount);
-        if (logsResult.__kind__ === "ok") {
-          const logs = logsResult.ok;
-          const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-          const recent = logs.filter((log) => {
-            const ms = Number(log.timestamp) / 1_000_000;
-            return ms > sevenDaysAgo;
-          });
-          setRecentCount(recent.length);
-          // Show last 5 most recent
-          const sorted = [...logs].sort(
-            (a, b) => Number(b.timestamp) - Number(a.timestamp),
-          );
-          setRecentLogs(sorted.slice(0, 5));
-        }
-        // If err — counts stay at 0, logs stay empty (backend not initialized)
-      })
-      .catch(() => {
-        // Silently ignore all other errors — show empty state
-      })
-      .finally(() => setLoading(false));
-  }, [actor]);
+      const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      const recent = allLogs.filter((log) => log.timestamp > sevenDaysAgo);
+      setRecentCount(recent.length);
+      setRecentLogs(allLogs.slice(0, 5));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   return (
     <div className="p-8">

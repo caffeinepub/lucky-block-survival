@@ -3,6 +3,10 @@ import { useState } from "react";
 import type { PublicUser } from "./backend.d";
 import { Layout } from "./components/Layout";
 import { useActor } from "./hooks/useActor";
+import { ensureOwnerExists } from "./lib/staffAccounts";
+
+// Seed owner account on app startup (runs once, idempotent)
+ensureOwnerExists();
 import { AdminPanelPage } from "./pages/AdminPanelPage";
 import { CommandVaultPage } from "./pages/CommandVaultPage";
 import { DashboardPage } from "./pages/DashboardPage";

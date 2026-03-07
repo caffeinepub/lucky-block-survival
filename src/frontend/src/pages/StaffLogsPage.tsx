@@ -10,13 +10,16 @@ import {
   XCircle,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import type { PublicUser, PunishmentLog } from "../backend.d";
-import { useActor } from "../hooks/useActor";
+import type { PublicUser } from "../backend.d";
+import {
+  type LocalPunishmentLog,
+  addPunishmentLog,
+  getAllPunishmentLogs,
+} from "../lib/portalData";
 import { type AuditEntry, getAuditEntries } from "../lib/punishmentAudit";
 
-function formatTimestamp(ts: bigint): string {
-  const ms = Number(ts) / 1_000_000;
-  return new Date(ms).toLocaleString("en-US", {
+function formatTimestamp(ts: number): string {
+  return new Date(ts).toLocaleString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -39,14 +42,11 @@ interface StaffLogsPageProps {
   currentUser: PublicUser;
 }
 
-export function StaffLogsPage({
-  currentUser: _currentUser,
-}: StaffLogsPageProps) {
-  const { actor } = useActor();
+export function StaffLogsPage({ currentUser }: StaffLogsPageProps) {
   const [activeTab, setActiveTab] = useState<"view" | "log" | "audit">("view");
 
   // View logs state
-  const [logs, setLogs] = useState<PunishmentLog[]>([]);
+  const [logs, setLogs] = useState<LocalPunishmentLog[]>([]);
   const [logsLoading, setLogsLoading] = useState(true);
   const [search, setSearch] = useState("");
 
@@ -63,37 +63,23 @@ export function StaffLogsPage({
   const [submitError, setSubmitError] = useState("");
 
   const fetchLogs = () => {
-    if (!actor) {
-      setLogsLoading(false);
-      return;
-    }
     setLogsLoading(true);
-    actor
-      .getAllPunishmentLogs()
-      .then((result) => {
-        if (result.__kind__ === "ok") {
-          const sorted = [...result.ok].sort(
-            (a, b) => Number(b.timestamp) - Number(a.timestamp),
-          );
-          setLogs(sorted);
-        }
-        // If err — show empty state (backend not initialized)
-      })
-      .catch(() => {
-        // Silently ignore — backend not initialized; show empty state
-      })
-      .finally(() => setLogsLoading(false));
+    try {
+      setLogs(getAllPunishmentLogs());
+    } finally {
+      setLogsLoading(false);
+    }
   };
 
   const fetchAudit = () => {
     setAuditEntries(getAuditEntries());
   };
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: fetchLogs is defined inside component and depends on actor
+  // biome-ignore lint/correctness/useExhaustiveDependencies: fetch functions are stable local helpers
   useEffect(() => {
     if (activeTab === "view") fetchLogs();
     if (activeTab === "audit") fetchAudit();
-  }, [actor, activeTab]);
+  }, [activeTab]);
 
   const filteredLogs = logs.filter(
     (log) =>
@@ -103,33 +89,43 @@ export function StaffLogsPage({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!actor) return;
     setSubmitLoading(true);
     setSubmitError("");
     setSubmitSuccess(false);
     try {
-      const result = await actor.submitPunishmentLog(
+      const newLog = addPunishmentLog({
         ign,
         rnd,
-        BigInt(offenseNum),
+        offenseNumber: Number(offenseNum),
         proof,
-      );
-      if (result.__kind__ === "ok") {
-        setSubmitSuccess(true);
-        setIgn("");
-        setRnd("");
-        setOffenseNum("1");
-        setProof("");
-        setTimeout(() => setSubmitSuccess(false), 5000);
-      } else {
-        setSubmitError(
-          "Your session does not have permission. Please log out and back in.",
-        );
+        submittedBy: currentUser.username,
+      });
+
+      // Fire Discord webhook (best-effort, ignore errors)
+      const webhookUrl = localStorage.getItem("portal_webhook_punishment");
+      if (webhookUrl) {
+        try {
+          await fetch(webhookUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              content: `⚠️ **New Punishment Log** submitted by **${newLog.submittedBy}**\n**IGN:** ${newLog.ign}\n**Reason & Date:** ${newLog.rnd}\n**Offense #:** ${newLog.offenseNumber}\n**Proof:** ${newLog.proof || "N/A"}`,
+            }),
+          });
+        } catch {
+          // Webhook errors are ignored — log was saved locally regardless
+        }
       }
+
+      setSubmitSuccess(true);
+      setIgn("");
+      setRnd("");
+      setOffenseNum("1");
+      setProof("");
+      fetchLogs();
+      setTimeout(() => setSubmitSuccess(false), 5000);
     } catch {
-      setSubmitError(
-        "Your session does not have permission. Please log out and back in.",
-      );
+      setSubmitError("Failed to save log. Please try again.");
     } finally {
       setSubmitLoading(false);
     }

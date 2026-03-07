@@ -6,22 +6,26 @@ import {
   XCircle,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import type { LOARequest, PublicUser } from "../backend.d";
+import type { PublicUser } from "../backend.d";
 import { Role } from "../backend.d";
-import { useActor } from "../hooks/useActor";
+import {
+  type LocalLOARequest,
+  addLOARequest,
+  deactivateLOA,
+  getAllLOARequests,
+} from "../lib/portalData";
 
 interface LeaveRequestsPageProps {
   currentUser: PublicUser;
 }
 
 export function LeaveRequestsPage({ currentUser }: LeaveRequestsPageProps) {
-  const { actor } = useActor();
   const [activeTab, setActiveTab] = useState<"active" | "submit">("active");
 
   // Active LOAs
-  const [loas, setLoas] = useState<LOARequest[]>([]);
+  const [loas, setLoas] = useState<LocalLOARequest[]>([]);
   const [loasLoading, setLoasLoading] = useState(true);
-  const [deactivatingId, setDeactivatingId] = useState<bigint | null>(null);
+  const [deactivatingId, setDeactivatingId] = useState<number | null>(null);
 
   // Form state
   const [ign, setIgn] = useState("");
@@ -36,40 +40,24 @@ export function LeaveRequestsPage({ currentUser }: LeaveRequestsPageProps) {
     currentUser.role === Role.Owner || currentUser.role === Role.CoOwner;
 
   const fetchLOAs = () => {
-    if (!actor) {
-      setLoasLoading(false);
-      return;
-    }
     setLoasLoading(true);
-    actor
-      .getAllLOARequests()
-      .then((result) => {
-        if (result.__kind__ === "ok") {
-          const active = result.ok.filter((l) => l.active);
-          const sorted = active.sort(
-            (a, b) => Number(b.timestamp) - Number(a.timestamp),
-          );
-          setLoas(sorted);
-        }
-        // If err — show empty state (backend not initialized)
-      })
-      .catch(() => {
-        // Silently ignore — backend not initialized; show empty state
-      })
-      .finally(() => setLoasLoading(false));
+    try {
+      setLoas(getAllLOARequests());
+    } finally {
+      setLoasLoading(false);
+    }
   };
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: fetchLOAs is defined inside component and depends on actor
+  // biome-ignore lint/correctness/useExhaustiveDependencies: fetchLOAs is a stable local helper
   useEffect(() => {
     if (activeTab === "active") fetchLOAs();
-  }, [actor, activeTab]);
+  }, [activeTab]);
 
-  const handleDeactivate = async (loa: LOARequest, _displayIdx: number) => {
-    if (!actor) return;
+  const handleDeactivate = (loa: LocalLOARequest) => {
     setDeactivatingId(loa.id);
     try {
-      const result = await actor.deactivateLOA(loa.id);
-      if (result.__kind__ === "ok") {
+      const success = deactivateLOA(loa.id);
+      if (success) {
         setLoas((prev) => prev.filter((l) => l.id !== loa.id));
       }
     } catch (e) {
@@ -81,33 +69,42 @@ export function LeaveRequestsPage({ currentUser }: LeaveRequestsPageProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!actor) return;
     setSubmitLoading(true);
     setSubmitError("");
     setSubmitSuccess(false);
     try {
-      const result = await actor.submitLOARequest(
+      const newLoa = addLOARequest({
         ign,
-        discord,
+        discordUsername: discord,
         leaveDate,
         returnDate,
-      );
-      if (result.__kind__ === "ok") {
-        setSubmitSuccess(true);
-        setIgn("");
-        setDiscord("");
-        setLeaveDate("");
-        setReturnDate("");
-        setTimeout(() => setSubmitSuccess(false), 5000);
-      } else {
-        setSubmitError(
-          "Your session does not have permission. Please log out and back in.",
-        );
+        submittedBy: currentUser.username,
+      });
+
+      // Fire Discord webhook (best-effort, ignore errors)
+      const webhookUrl = localStorage.getItem("portal_webhook_loa");
+      if (webhookUrl) {
+        try {
+          await fetch(webhookUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              content: `📅 **New LOA Request** submitted by **${newLoa.submittedBy}**\n**IGN:** ${newLoa.ign}\n**Discord:** ${newLoa.discordUsername}\n**Leaving:** ${newLoa.leaveDate}\n**Returning:** ${newLoa.returnDate}`,
+            }),
+          });
+        } catch {
+          // Webhook errors are ignored — LOA was saved locally regardless
+        }
       }
+
+      setSubmitSuccess(true);
+      setIgn("");
+      setDiscord("");
+      setLeaveDate("");
+      setReturnDate("");
+      setTimeout(() => setSubmitSuccess(false), 5000);
     } catch {
-      setSubmitError(
-        "Your session does not have permission. Please log out and back in.",
-      );
+      setSubmitError("Failed to submit LOA. Please try again.");
     } finally {
       setSubmitLoading(false);
     }
@@ -177,6 +174,7 @@ export function LeaveRequestsPage({ currentUser }: LeaveRequestsPageProps) {
           <button
             key={tab}
             type="button"
+            data-ocid={`leave_requests.${tab}_tab`}
             onClick={() => setActiveTab(tab)}
             className="px-5 py-2 rounded-md transition-all duration-200"
             style={{
@@ -301,7 +299,7 @@ export function LeaveRequestsPage({ currentUser }: LeaveRequestsPageProps) {
                             <button
                               type="button"
                               data-ocid={`leave_requests.deactivate_button.${idx + 1}`}
-                              onClick={() => handleDeactivate(loa, idx + 1)}
+                              onClick={() => handleDeactivate(loa)}
                               disabled={deactivatingId === loa.id}
                               className="flex items-center gap-1.5 px-3 py-1.5 rounded transition-all duration-200"
                               style={{

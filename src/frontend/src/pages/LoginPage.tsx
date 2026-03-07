@@ -2,20 +2,13 @@ import { Eye, EyeOff, Shield, Sword } from "lucide-react";
 import { useState } from "react";
 import type { PublicUser } from "../backend.d";
 import { Role } from "../backend.d";
-import { useActor } from "../hooks/useActor";
-import { sha256Hex } from "../lib/crypto";
-
-// Hardcoded Owner fallback credentials (SHA-256 of "Cookies1969")
-const OWNER_PASSWORD_HASH =
-  "529b2082c108a03cb8b85908c33b57cfb815b497f51aedd1bf049a87908f4080";
-const OWNER_USERNAME = "Sirbrit_";
+import { verifyCredentials } from "../lib/staffAccounts";
 
 interface LoginPageProps {
   onLogin: (user: PublicUser) => void;
 }
 
 export function LoginPage({ onLogin }: LoginPageProps) {
-  const { actor } = useActor();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -24,55 +17,26 @@ export function LoginPage({ onLogin }: LoginPageProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!actor) {
-      setError("Connection error. Please try again.");
-      return;
-    }
     setError("");
     setLoading(true);
     try {
-      const hashedPassword = await sha256Hex(password);
+      // Verify against localStorage staff accounts (includes Owner)
+      const account = await verifyCredentials(username, password);
 
-      // Step 1: Try to initialize the backend (may fail with permission error — that's OK)
-      try {
-        await actor.initializeBackend("");
-      } catch {
-        // Ignore — expected to fail if caller doesn't have admin role
-      }
-
-      // Step 2: Try the backend login
-      let loginResult: Awaited<ReturnType<typeof actor.login>> | null = null;
-      try {
-        loginResult = await actor.login(username, hashedPassword);
-      } catch {
-        // Backend threw — fall through to local fallback below
-      }
-
-      // Step 3: Handle backend login result
-      if (loginResult && loginResult.__kind__ === "ok") {
-        onLogin(loginResult.ok);
-        return;
-      }
-
-      // Step 4: Backend login failed or threw — try local Owner fallback
-      if (
-        username === OWNER_USERNAME &&
-        hashedPassword === OWNER_PASSWORD_HASH
-      ) {
-        const localOwner: PublicUser = {
-          id: BigInt(1),
-          username: "Sirbrit_",
-          role: Role.Owner,
-          createdAt: BigInt(Date.now()) * BigInt(1_000_000),
+      if (account) {
+        const publicUser: PublicUser = {
+          id: BigInt(account.id),
+          username: account.username,
+          role: account.role,
+          createdAt: BigInt(account.createdAt) * BigInt(1_000_000),
         };
-        onLogin(localOwner);
+        onLogin(publicUser);
         return;
       }
 
-      // Step 5: No match
       setError("Invalid credentials. Access denied.");
     } catch {
-      setError("Connection error. Please try again.");
+      setError("Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }

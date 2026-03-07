@@ -1,20 +1,33 @@
-import { Principal } from "@icp-sdk/core/principal";
 import {
   CheckCircle,
+  Copy,
+  Download,
   Loader2,
   Plus,
+  RefreshCw,
   ScrollText,
   Settings,
   Shield,
+  Trash2,
+  Upload,
   Users,
   Webhook,
   XCircle,
 } from "lucide-react";
-import { useEffect, useState } from "react";
-import type { PublicUser, PunishmentLog } from "../backend.d";
+import { useEffect, useRef, useState } from "react";
+import type { PublicUser } from "../backend.d";
 import { Role } from "../backend.d";
-import { useActor } from "../hooks/useActor";
-import { sha256Hex } from "../lib/crypto";
+import {
+  type LocalPunishmentLog,
+  getAllPunishmentLogs,
+} from "../lib/portalData";
+import {
+  type StaffAccount,
+  createAccount,
+  getAllAccounts,
+  removeAccount,
+} from "../lib/staffAccounts";
+import { generateSyncCode, importSyncCode } from "../lib/syncCode";
 
 function getRoleDisplayName(role: Role): string {
   switch (role) {
@@ -38,12 +51,21 @@ function getRoleBadgeClass(role: Role): string {
   }
 }
 
-function formatTimestamp(ts: bigint): string {
-  const ms = Number(ts) / 1_000_000;
-  return new Date(ms).toLocaleDateString("en-US", {
+function formatTimestamp(ts: number): string {
+  return new Date(ts).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
+  });
+}
+
+function formatLogTimestamp(ts: number): string {
+  return new Date(ts).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 }
 
@@ -52,13 +74,12 @@ interface AdminPanelPageProps {
 }
 
 export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
-  const { actor } = useActor();
-  const [activeTab, setActiveTab] = useState<"staff" | "webhook" | "logs">(
-    "staff",
-  );
+  const [activeTab, setActiveTab] = useState<
+    "staff" | "webhook" | "logs" | "sync"
+  >("staff");
 
   // Staff management
-  const [users, setUsers] = useState<PublicUser[]>([]);
+  const [users, setUsers] = useState<StaffAccount[]>([]);
   const [usersLoading, setUsersLoading] = useState(true);
 
   // Create account dialog
@@ -76,100 +97,63 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
   const [webhookLoading, setWebhookLoading] = useState(false);
   const [webhookSaveSuccess, setWebhookSaveSuccess] = useState(false);
   const [webhookSaveError, setWebhookSaveError] = useState("");
-  const [webhookFetching, setWebhookFetching] = useState(true);
 
   // All logs
-  const [logs, setLogs] = useState<PunishmentLog[]>([]);
+  const [logs, setLogs] = useState<LocalPunishmentLog[]>([]);
   const [logsLoading, setLogsLoading] = useState(true);
+
+  // Sync
+  const [syncCode, setSyncCode] = useState("");
+  const [syncGenerated, setSyncGenerated] = useState(false);
+  const [importInput, setImportInput] = useState("");
+  const [importResult, setImportResult] = useState<string>("");
+  const [importError, setImportError] = useState<string>("");
+  const [copySuccess, setCopySuccess] = useState(false);
+  const syncTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   const isOwner = currentUser.role === Role.Owner;
 
   const fetchUsers = () => {
-    if (!actor) {
-      setUsersLoading(false);
-      return;
-    }
     setUsersLoading(true);
-    actor
-      .getAllUsers()
-      .then((result) => {
-        if (result.__kind__ === "ok") setUsers(result.ok);
-        // If err — show empty list (backend not initialized)
-      })
-      .catch(() => {
-        // Silently ignore — backend not initialized; show empty list
-      })
-      .finally(() => setUsersLoading(false));
+    try {
+      setUsers(getAllAccounts());
+    } finally {
+      setUsersLoading(false);
+    }
   };
 
   const fetchWebhookConfig = () => {
-    if (!actor) {
-      setWebhookFetching(false);
-      return;
-    }
-    setWebhookFetching(true);
-    actor
-      .getWebhookConfig()
-      .then((result) => {
-        if (result.__kind__ === "ok") {
-          setPunishmentWebhook(result.ok.punishmentWebhookUrl);
-          setLoaWebhook(result.ok.loaWebhookUrl);
-        }
-        // If err — silently show the form with empty defaults (backend not initialized)
-      })
-      .catch(() => {
-        // Silently ignore — backend not initialized; show form with empty defaults
-      })
-      .finally(() => setWebhookFetching(false));
+    const punishment = localStorage.getItem("portal_webhook_punishment") ?? "";
+    const loa = localStorage.getItem("portal_webhook_loa") ?? "";
+    setPunishmentWebhook(punishment);
+    setLoaWebhook(loa);
   };
 
   const fetchLogs = () => {
-    if (!actor) {
-      setLogsLoading(false);
-      return;
-    }
     setLogsLoading(true);
-    actor
-      .getAllPunishmentLogs()
-      .then((result) => {
-        if (result.__kind__ === "ok") {
-          const sorted = [...result.ok].sort(
-            (a, b) => Number(b.timestamp) - Number(a.timestamp),
-          );
-          setLogs(sorted);
-        }
-        // If err — show empty state, backend not initialized
-      })
-      .catch(() => {
-        // Silently ignore — backend not initialized; show empty state
-      })
-      .finally(() => setLogsLoading(false));
+    try {
+      setLogs(getAllPunishmentLogs());
+    } finally {
+      setLogsLoading(false);
+    }
   };
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: fetch functions defined inside component, depend on actor
+  // biome-ignore lint/correctness/useExhaustiveDependencies: fetch functions are defined inside component and stable per render
   useEffect(() => {
-    if (!actor || !isOwner) return;
+    if (!isOwner) return;
     if (activeTab === "staff") fetchUsers();
     if (activeTab === "webhook") fetchWebhookConfig();
     if (activeTab === "logs") fetchLogs();
-  }, [actor, activeTab, isOwner]);
+  }, [activeTab, isOwner]);
 
   const handleCreateAccount = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!actor) return;
     setCreateLoading(true);
     setCreateError("");
     setCreateSuccess(false);
     try {
-      const hashedPassword = await sha256Hex(newPassword);
-      const anonPrincipal = Principal.anonymous();
-      const result = await actor.createStaffAccount(
-        anonPrincipal,
-        newUsername,
-        hashedPassword,
-        newRole,
-      );
-      if (result.__kind__ === "ok") {
+      const result = await createAccount(newUsername, newPassword, newRole);
+      if (result.success) {
         setCreateSuccess(true);
         setNewUsername("");
         setNewPassword("");
@@ -180,40 +164,72 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
           setShowCreateDialog(false);
         }, 2000);
       } else {
-        setCreateError(result.err || "Failed to create account.");
+        setCreateError(result.error || "Failed to create account.");
       }
     } catch {
-      setCreateError("Connection error. Please try again.");
+      setCreateError("An unexpected error occurred. Please try again.");
     } finally {
       setCreateLoading(false);
     }
   };
 
-  const handleSaveWebhook = async (e: React.FormEvent) => {
+  const handleDeleteAccount = (accountId: number) => {
+    removeAccount(accountId);
+    fetchUsers();
+  };
+
+  const handleSaveWebhook = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!actor) return;
     setWebhookLoading(true);
     setWebhookSaveError("");
     setWebhookSaveSuccess(false);
     try {
-      const result = await actor.setWebhookConfig(
-        punishmentWebhook,
-        loaWebhook,
-      );
-      if (result.__kind__ === "ok") {
-        setWebhookSaveSuccess(true);
-        setTimeout(() => setWebhookSaveSuccess(false), 3000);
-      } else {
-        setWebhookSaveError(
-          "Webhook config could not be saved — backend not initialized. Please contact your server admin.",
-        );
-      }
+      localStorage.setItem("portal_webhook_punishment", punishmentWebhook);
+      localStorage.setItem("portal_webhook_loa", loaWebhook);
+      setWebhookSaveSuccess(true);
+      setTimeout(() => setWebhookSaveSuccess(false), 3000);
     } catch {
-      setWebhookSaveError(
-        "Webhook config could not be saved — backend not initialized. Please contact your server admin.",
-      );
+      setWebhookSaveError("Failed to save webhook config. Please try again.");
     } finally {
       setWebhookLoading(false);
+    }
+  };
+
+  const handleGenerateSyncCode = () => {
+    const code = generateSyncCode();
+    setSyncCode(code);
+    setSyncGenerated(true);
+  };
+
+  const handleCopySyncCode = async () => {
+    if (!syncCode) return;
+    try {
+      await navigator.clipboard.writeText(syncCode);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    } catch {
+      // Fallback: select the textarea
+      syncTextareaRef.current?.select();
+    }
+  };
+
+  const handleImportSyncCode = () => {
+    setImportResult("");
+    setImportError("");
+    if (!importInput.trim()) {
+      setImportError("Please paste a sync code first.");
+      return;
+    }
+    const result = importSyncCode(importInput);
+    if (result.success) {
+      setImportResult(
+        `Imported: ${result.accountsAdded} account${result.accountsAdded !== 1 ? "s" : ""}, ${result.logsAdded} log${result.logsAdded !== 1 ? "s" : ""}, ${result.loasAdded} LOA${result.loasAdded !== 1 ? "s" : ""} added.`,
+      );
+      setImportInput("");
+      // Refresh users if we're on staff tab
+      fetchUsers();
+    } else {
+      setImportError(result.error ?? "Import failed.");
     }
   };
 
@@ -256,6 +272,12 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
       label: "ALL LOGS",
       icon: <ScrollText size={13} />,
       ocid: "admin.logs_tab",
+    },
+    {
+      id: "sync" as const,
+      label: "SYNC DATA",
+      icon: <RefreshCw size={13} />,
+      ocid: "admin.sync_tab",
     },
   ];
 
@@ -336,7 +358,7 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
 
       {/* Tabs */}
       <div
-        className="flex gap-2 mb-6 p-1 rounded-lg"
+        className="flex gap-2 mb-6 p-1 rounded-lg flex-wrap"
         style={{
           background: "var(--bg-deep)",
           border: "1px solid var(--border-subtle)",
@@ -414,6 +436,7 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
               >
                 <button
                   type="button"
+                  data-ocid="admin.create_account_dialog.close_button"
                   onClick={() => setShowCreateDialog(false)}
                   className="absolute top-4 right-4"
                   style={{
@@ -452,6 +475,7 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
                     </label>
                     <input
                       id="admin-new-username"
+                      data-ocid="admin.new_username_input"
                       type="text"
                       value={newUsername}
                       onChange={(e) => setNewUsername(e.target.value)}
@@ -476,6 +500,7 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
                     </label>
                     <input
                       id="admin-new-password"
+                      data-ocid="admin.new_password_input"
                       type="password"
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
@@ -500,6 +525,7 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
                     </label>
                     <select
                       id="admin-new-role"
+                      data-ocid="admin.new_role_select"
                       value={newRole}
                       onChange={(e) => setNewRole(e.target.value as Role)}
                       style={{ ...inputStyle, cursor: "pointer" }}
@@ -521,6 +547,7 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
 
                   {createSuccess && (
                     <div
+                      data-ocid="admin.create_account.success_state"
                       className="flex items-center gap-2 rounded-md py-3 px-4"
                       style={{
                         background: "rgba(74, 222, 128, 0.1)",
@@ -534,6 +561,7 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
                   )}
                   {createError && (
                     <div
+                      data-ocid="admin.create_account.error_state"
                       className="flex items-center gap-2 rounded-md py-3 px-4"
                       style={{
                         background: "rgba(239, 68, 68, 0.1)",
@@ -549,8 +577,8 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
                   <div className="flex gap-3 mt-2">
                     <button
                       type="button"
+                      data-ocid="admin.create_account_dialog.cancel_button"
                       onClick={() => setShowCreateDialog(false)}
-                      data-ocid="admin.create_account_dialog"
                       className="flex-1 py-2 rounded-md"
                       style={{
                         background: "rgba(148, 163, 184, 0.08)",
@@ -567,6 +595,7 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
                     </button>
                     <button
                       type="submit"
+                      data-ocid="admin.create_account_dialog.submit_button"
                       disabled={createLoading}
                       className="flex-1 btn-neon py-2 rounded-md flex items-center justify-center gap-2"
                       style={{
@@ -613,11 +642,17 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
                       <th>ROLE</th>
                       <th>CREATED AT</th>
                       <th>ID</th>
+                      <th>ACTIONS</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {users.map((user) => (
-                      <tr key={String(user.id)}>
+                    {users.map((user, idx) => (
+                      <tr
+                        key={String(user.id)}
+                        data-ocid={
+                          idx < 3 ? `admin.staff.row.${idx + 1}` : undefined
+                        }
+                      >
                         <td style={{ fontWeight: 700 }}>
                           {user.username}
                           {user.username === currentUser.username && (
@@ -661,12 +696,41 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
                         >
                           #{String(user.id)}
                         </td>
+                        <td>
+                          {user.role !== Role.Owner && (
+                            <button
+                              type="button"
+                              data-ocid={
+                                idx < 3
+                                  ? `admin.staff.delete_button.${idx + 1}`
+                                  : "admin.staff.delete_button"
+                              }
+                              onClick={() => handleDeleteAccount(user.id)}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded transition-all duration-200"
+                              style={{
+                                background: "rgba(239, 68, 68, 0.08)",
+                                border: "1px solid rgba(239, 68, 68, 0.3)",
+                                color: "#ef4444",
+                                fontSize: "9px",
+                                fontFamily: '"JetBrains Mono", monospace',
+                                fontWeight: 700,
+                                cursor: "pointer",
+                                letterSpacing: "0.06em",
+                              }}
+                              title="Remove account"
+                            >
+                              <Trash2 size={10} />
+                              REMOVE
+                            </button>
+                          )}
+                        </td>
                       </tr>
                     ))}
                     {users.length === 0 && (
                       <tr>
                         <td
-                          colSpan={4}
+                          colSpan={5}
+                          data-ocid="admin.staff.empty_state"
                           className="text-center py-12"
                           style={{
                             color: "var(--text-muted)",
@@ -686,8 +750,8 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
             className="mt-3"
             style={{ fontSize: "11px", color: "var(--text-muted)" }}
           >
-            Note: Rank changes and account removal require principal-level
-            access (ICP identity management).
+            All account data is stored locally. Use the SYNC DATA tab to share
+            accounts with staff on other devices.
           </p>
         </div>
       )}
@@ -709,124 +773,113 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
             />
             <p style={{ fontSize: "12px", color: "var(--text-muted)" }}>
               Configure Discord Webhook URLs. When a punishment log or LOA is
-              submitted, a notification will be sent to these webhooks.
+              submitted, a notification will be sent to these webhooks. URLs are
+              stored locally on this device.
             </p>
           </div>
 
-          {webhookFetching ? (
-            <div
-              className="flex items-center justify-center py-12 gap-3"
-              style={{ color: "var(--text-muted)" }}
-            >
-              <Loader2
-                size={18}
-                className="animate-spin"
-                style={{ color: "#f59e0b" }}
-              />
-              Loading webhook configuration...
-            </div>
-          ) : (
-            <form
-              onSubmit={handleSaveWebhook}
-              className="neon-card flex flex-col gap-5"
-              style={{ padding: "28px 32px" }}
-            >
-              <div>
-                <label
-                  htmlFor="admin-punishment-webhook"
-                  className="block font-pixel mb-2"
-                  style={{
-                    fontSize: "9px",
-                    color: "var(--text-muted)",
-                    letterSpacing: "0.1em",
-                  }}
-                >
-                  PUNISHMENT LOG WEBHOOK URL
-                </label>
-                <input
-                  id="admin-punishment-webhook"
-                  data-ocid="admin.punishment_webhook_input"
-                  type="text"
-                  value={punishmentWebhook}
-                  onChange={(e) => setPunishmentWebhook(e.target.value)}
-                  placeholder="https://discord.com/api/webhooks/..."
-                  style={inputStyle}
-                  onFocus={handleFocus}
-                  onBlur={handleBlur}
-                />
-              </div>
-
-              <div>
-                <label
-                  htmlFor="admin-loa-webhook"
-                  className="block font-pixel mb-2"
-                  style={{
-                    fontSize: "9px",
-                    color: "var(--text-muted)",
-                    letterSpacing: "0.1em",
-                  }}
-                >
-                  LOA WEBHOOK URL
-                </label>
-                <input
-                  id="admin-loa-webhook"
-                  data-ocid="admin.loa_webhook_input"
-                  type="text"
-                  value={loaWebhook}
-                  onChange={(e) => setLoaWebhook(e.target.value)}
-                  placeholder="https://discord.com/api/webhooks/..."
-                  style={inputStyle}
-                  onFocus={handleFocus}
-                  onBlur={handleBlur}
-                />
-              </div>
-
-              {webhookSaveSuccess && (
-                <div
-                  className="flex items-center gap-2 rounded-md py-3 px-4"
-                  style={{
-                    background: "rgba(74, 222, 128, 0.1)",
-                    border: "1px solid rgba(74, 222, 128, 0.4)",
-                    color: "#4ade80",
-                    fontSize: "12px",
-                  }}
-                >
-                  <CheckCircle size={14} /> Webhook configuration saved!
-                </div>
-              )}
-              {webhookSaveError && (
-                <div
-                  className="flex items-center gap-2 rounded-md py-3 px-4"
-                  style={{
-                    background: "rgba(239, 68, 68, 0.1)",
-                    border: "1px solid rgba(239, 68, 68, 0.4)",
-                    color: "#ef4444",
-                    fontSize: "12px",
-                  }}
-                >
-                  <XCircle size={14} /> {webhookSaveError}
-                </div>
-              )}
-
-              <button
-                data-ocid="admin.save_webhook_button"
-                type="submit"
-                disabled={webhookLoading}
-                className="btn-neon flex items-center justify-center gap-2 py-3 rounded-md"
-                style={{ fontSize: "11px", opacity: webhookLoading ? 0.7 : 1 }}
+          <form
+            onSubmit={handleSaveWebhook}
+            className="neon-card flex flex-col gap-5"
+            style={{ padding: "28px 32px" }}
+          >
+            <div>
+              <label
+                htmlFor="admin-punishment-webhook"
+                className="block font-pixel mb-2"
+                style={{
+                  fontSize: "9px",
+                  color: "var(--text-muted)",
+                  letterSpacing: "0.1em",
+                }}
               >
-                {webhookLoading ? (
-                  <>
-                    <Loader2 size={14} className="animate-spin" /> SAVING...
-                  </>
-                ) : (
-                  <>
-                    <Webhook size={14} /> SAVE CONFIG
-                  </>
-                )}
-              </button>
-            </form>
-          )}
+                PUNISHMENT LOG WEBHOOK URL
+              </label>
+              <input
+                id="admin-punishment-webhook"
+                data-ocid="admin.punishment_webhook_input"
+                type="text"
+                value={punishmentWebhook}
+                onChange={(e) => setPunishmentWebhook(e.target.value)}
+                placeholder="https://discord.com/api/webhooks/..."
+                style={inputStyle}
+                onFocus={handleFocus}
+                onBlur={handleBlur}
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="admin-loa-webhook"
+                className="block font-pixel mb-2"
+                style={{
+                  fontSize: "9px",
+                  color: "var(--text-muted)",
+                  letterSpacing: "0.1em",
+                }}
+              >
+                LOA WEBHOOK URL
+              </label>
+              <input
+                id="admin-loa-webhook"
+                data-ocid="admin.loa_webhook_input"
+                type="text"
+                value={loaWebhook}
+                onChange={(e) => setLoaWebhook(e.target.value)}
+                placeholder="https://discord.com/api/webhooks/..."
+                style={inputStyle}
+                onFocus={handleFocus}
+                onBlur={handleBlur}
+              />
+            </div>
+
+            {webhookSaveSuccess && (
+              <div
+                data-ocid="admin.webhook.success_state"
+                className="flex items-center gap-2 rounded-md py-3 px-4"
+                style={{
+                  background: "rgba(74, 222, 128, 0.1)",
+                  border: "1px solid rgba(74, 222, 128, 0.4)",
+                  color: "#4ade80",
+                  fontSize: "12px",
+                }}
+              >
+                <CheckCircle size={14} /> Webhook configuration saved!
+              </div>
+            )}
+            {webhookSaveError && (
+              <div
+                data-ocid="admin.webhook.error_state"
+                className="flex items-center gap-2 rounded-md py-3 px-4"
+                style={{
+                  background: "rgba(239, 68, 68, 0.1)",
+                  border: "1px solid rgba(239, 68, 68, 0.4)",
+                  color: "#ef4444",
+                  fontSize: "12px",
+                }}
+              >
+                <XCircle size={14} /> {webhookSaveError}
+              </div>
+            )}
+
+            <button
+              data-ocid="admin.save_webhook_button"
+              type="submit"
+              disabled={webhookLoading}
+              className="btn-neon flex items-center justify-center gap-2 py-3 rounded-md"
+              style={{ fontSize: "11px", opacity: webhookLoading ? 0.7 : 1 }}
+            >
+              {webhookLoading ? (
+                <>
+                  <Loader2 size={14} className="animate-spin" /> SAVING...
+                </>
+              ) : (
+                <>
+                  <Webhook size={14} /> SAVE CONFIG
+                </>
+              )}
+            </button>
+          </form>
         </div>
       )}
 
@@ -839,6 +892,7 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
           >
             {logsLoading ? (
               <div
+                data-ocid="admin.logs.loading_state"
                 className="flex items-center justify-center py-16 gap-3"
                 style={{ color: "var(--text-muted)" }}
               >
@@ -851,6 +905,7 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
               </div>
             ) : logs.length === 0 ? (
               <div
+                data-ocid="admin.logs.empty_state"
                 className="flex flex-col items-center justify-center py-16"
                 style={{ color: "var(--text-muted)" }}
               >
@@ -862,7 +917,11 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="staff-table" style={{ minWidth: "800px" }}>
+                <table
+                  data-ocid="admin.logs.table"
+                  className="staff-table"
+                  style={{ minWidth: "800px" }}
+                >
                   <thead>
                     <tr>
                       <th>IGN</th>
@@ -874,8 +933,13 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
                     </tr>
                   </thead>
                   <tbody>
-                    {logs.map((log) => (
-                      <tr key={String(log.id)}>
+                    {logs.map((log, idx) => (
+                      <tr
+                        key={String(log.id)}
+                        data-ocid={
+                          idx < 3 ? `admin.logs.row.${idx + 1}` : undefined
+                        }
+                      >
                         <td style={{ fontWeight: 700 }}>{log.ign}</td>
                         <td
                           style={{
@@ -927,7 +991,7 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
                             whiteSpace: "nowrap",
                           }}
                         >
-                          {formatTimestamp(log.timestamp)}
+                          {formatLogTimestamp(log.timestamp)}
                         </td>
                       </tr>
                     ))}
@@ -944,6 +1008,239 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
               {logs.length} total punishment log{logs.length !== 1 ? "s" : ""}
             </p>
           )}
+        </div>
+      )}
+
+      {/* =================== SYNC TAB =================== */}
+      {activeTab === "sync" && (
+        <div style={{ maxWidth: "640px" }}>
+          {/* Info banner */}
+          <div
+            className="rounded-lg mb-6 flex items-start gap-3"
+            style={{
+              background: "rgba(245, 158, 11, 0.06)",
+              border: "1px solid rgba(245, 158, 11, 0.25)",
+              padding: "12px 16px",
+            }}
+          >
+            <RefreshCw
+              size={14}
+              style={{ color: "#f59e0b", marginTop: "2px", flexShrink: 0 }}
+            />
+            <p style={{ fontSize: "12px", color: "var(--text-muted)" }}>
+              Since all data is stored locally, use the sync code to share
+              accounts, punishment logs, and LOAs with staff on other devices.
+              Data merges — existing entries are never overwritten.
+            </p>
+          </div>
+
+          {/* EXPORT section */}
+          <div className="neon-card mb-6" style={{ padding: "28px 32px" }}>
+            <h3
+              className="font-pixel mb-2"
+              style={{
+                fontSize: "10px",
+                color: "#f59e0b",
+                letterSpacing: "0.08em",
+              }}
+            >
+              <Download
+                size={11}
+                style={{ display: "inline", marginRight: "6px" }}
+              />
+              EXPORT SYNC CODE
+            </h3>
+            <p
+              style={{
+                fontSize: "12px",
+                color: "var(--text-muted)",
+                marginBottom: "16px",
+              }}
+            >
+              Share this code with your staff so they can import all accounts,
+              logs, and LOAs on their device.
+            </p>
+
+            <div className="flex gap-3 mb-4">
+              <button
+                type="button"
+                data-ocid="admin.sync.generate_button"
+                onClick={handleGenerateSyncCode}
+                className="btn-neon flex items-center gap-2 py-2 px-4 rounded-md"
+                style={{ fontSize: "10px" }}
+              >
+                <RefreshCw size={12} />
+                GENERATE CODE
+              </button>
+              {syncGenerated && (
+                <button
+                  type="button"
+                  data-ocid="admin.sync.copy_button"
+                  onClick={handleCopySyncCode}
+                  className="flex items-center gap-2 py-2 px-4 rounded-md transition-all duration-200"
+                  style={{
+                    fontSize: "10px",
+                    fontFamily: '"JetBrains Mono", monospace',
+                    fontWeight: 700,
+                    letterSpacing: "0.06em",
+                    background: copySuccess
+                      ? "rgba(74, 222, 128, 0.12)"
+                      : "rgba(245, 158, 11, 0.1)",
+                    border: copySuccess
+                      ? "1px solid rgba(74, 222, 128, 0.4)"
+                      : "1px solid rgba(245, 158, 11, 0.4)",
+                    color: copySuccess ? "#4ade80" : "#f59e0b",
+                    cursor: "pointer",
+                  }}
+                >
+                  {copySuccess ? (
+                    <>
+                      <CheckCircle size={12} /> COPIED!
+                    </>
+                  ) : (
+                    <>
+                      <Copy size={12} /> COPY
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+
+            {syncGenerated && (
+              <textarea
+                ref={syncTextareaRef}
+                readOnly
+                value={syncCode}
+                rows={5}
+                style={{
+                  width: "100%",
+                  padding: "10px 14px",
+                  background: "var(--bg-deep)",
+                  border: "1px solid var(--border-subtle)",
+                  borderRadius: "6px",
+                  color: "var(--text-muted)",
+                  fontSize: "11px",
+                  fontFamily: '"JetBrains Mono", monospace',
+                  outline: "none",
+                  resize: "vertical",
+                  wordBreak: "break-all",
+                }}
+                onClick={(e) => (e.target as HTMLTextAreaElement).select()}
+                onKeyDown={(e) => {
+                  if (e.key === "a" && (e.ctrlKey || e.metaKey)) {
+                    (e.target as HTMLTextAreaElement).select();
+                  }
+                }}
+              />
+            )}
+          </div>
+
+          {/* IMPORT section */}
+          <div className="neon-card" style={{ padding: "28px 32px" }}>
+            <h3
+              className="font-pixel mb-2"
+              style={{
+                fontSize: "10px",
+                color: "#f59e0b",
+                letterSpacing: "0.08em",
+              }}
+            >
+              <Upload
+                size={11}
+                style={{ display: "inline", marginRight: "6px" }}
+              />
+              IMPORT SYNC CODE
+            </h3>
+            <p
+              style={{
+                fontSize: "12px",
+                color: "var(--text-muted)",
+                marginBottom: "16px",
+              }}
+            >
+              Paste a sync code from the Owner to load all staff data onto this
+              device.
+            </p>
+
+            <textarea
+              data-ocid="admin.sync.import_textarea"
+              value={importInput}
+              onChange={(e) => setImportInput(e.target.value)}
+              placeholder="Paste sync code here..."
+              rows={4}
+              style={{
+                width: "100%",
+                padding: "10px 14px",
+                background: "var(--bg-deep)",
+                border: "1px solid var(--border-subtle)",
+                borderRadius: "6px",
+                color: "var(--text-primary)",
+                fontSize: "12px",
+                fontFamily: '"JetBrains Mono", monospace',
+                outline: "none",
+                resize: "vertical",
+                marginBottom: "12px",
+                transition: "border-color 0.2s, box-shadow 0.2s",
+              }}
+              onFocus={(e) => {
+                e.target.style.borderColor = "rgba(245, 158, 11, 0.5)";
+                e.target.style.boxShadow = "0 0 8px rgba(245, 158, 11, 0.15)";
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor = "var(--border-subtle)";
+                e.target.style.boxShadow = "none";
+              }}
+            />
+
+            <button
+              type="button"
+              data-ocid="admin.sync.import_button"
+              onClick={handleImportSyncCode}
+              className="flex items-center gap-2 py-2 px-4 rounded-md transition-all duration-200"
+              style={{
+                fontSize: "10px",
+                fontFamily: '"JetBrains Mono", monospace',
+                fontWeight: 700,
+                letterSpacing: "0.06em",
+                background: "rgba(245, 158, 11, 0.12)",
+                border: "1px solid rgba(245, 158, 11, 0.4)",
+                color: "#f59e0b",
+                cursor: "pointer",
+              }}
+            >
+              <Upload size={12} />
+              IMPORT
+            </button>
+
+            {importResult && (
+              <div
+                data-ocid="admin.sync.import.success_state"
+                className="flex items-center gap-2 rounded-md py-3 px-4 mt-4"
+                style={{
+                  background: "rgba(74, 222, 128, 0.1)",
+                  border: "1px solid rgba(74, 222, 128, 0.4)",
+                  color: "#4ade80",
+                  fontSize: "12px",
+                }}
+              >
+                <CheckCircle size={14} /> {importResult}
+              </div>
+            )}
+            {importError && (
+              <div
+                data-ocid="admin.sync.import.error_state"
+                className="flex items-center gap-2 rounded-md py-3 px-4 mt-4"
+                style={{
+                  background: "rgba(239, 68, 68, 0.1)",
+                  border: "1px solid rgba(239, 68, 68, 0.4)",
+                  color: "#ef4444",
+                  fontSize: "12px",
+                }}
+              >
+                <XCircle size={14} /> {importError}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
