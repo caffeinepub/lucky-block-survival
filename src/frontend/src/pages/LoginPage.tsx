@@ -38,9 +38,7 @@ export function LoginPage() {
   const handleDiscordLogin = () => {
     if (!agreed || loading) return;
     setLoading(true);
-    const redirectUri = encodeURIComponent(
-      `${window.location.origin}/callback`,
-    );
+    const redirectUri = encodeURIComponent(`${window.location.origin}/`);
     const url = `https://discord.com/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&response_type=code&redirect_uri=${redirectUri}&scope=identify+guilds.members.read`;
     window.location.href = url;
   };
@@ -177,7 +175,7 @@ export function LoginPage() {
           >
             <Checkbox
               id="agree-rules"
-              data-ocid="login.agree_checkbox"
+              data-ocid="login.checkbox"
               checked={agreed}
               onCheckedChange={(v) => setAgreed(!!v)}
               className="mt-0.5 flex-shrink-0"
@@ -198,7 +196,7 @@ export function LoginPage() {
 
           <button
             type="button"
-            data-ocid="login.discord_button"
+            data-ocid="login.primary_button"
             onClick={handleDiscordLogin}
             disabled={!agreed || loading}
             className="w-full flex items-center justify-center gap-3 py-4 rounded-lg transition-all duration-200"

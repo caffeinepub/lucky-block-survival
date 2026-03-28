@@ -20,7 +20,7 @@ export function CallbackPage() {
       return;
     }
 
-    const redirectUri = `${window.location.origin}/callback`;
+    const redirectUri = `${window.location.origin}/`;
 
     (async () => {
       try {
@@ -181,7 +181,7 @@ export function CallbackPage() {
               </div>
               <a
                 href="/"
-                data-ocid="callback.try_again_button"
+                data-ocid="callback.primary_button"
                 className="flex items-center gap-2 py-3 px-6 rounded-lg transition-all duration-200"
                 style={{
                   background: "rgba(88, 101, 242, 0.12)",

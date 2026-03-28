@@ -126,10 +126,12 @@ function AppShell() {
 
 export default function App() {
   const path = window.location.pathname;
+  const params = new URLSearchParams(window.location.search);
   const isCallback =
     path === "/callback" ||
     path.endsWith("/callback") ||
-    path.includes("/callback?");
+    path.includes("/callback?") ||
+    (path === "/" && params.has("code"));
 
   if (isCallback) {
     return (
