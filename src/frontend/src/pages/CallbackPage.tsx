@@ -1,16 +1,15 @@
 import { AlertCircle, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { SiDiscord } from "react-icons/si";
+import { createActorWithConfig } from "../config";
 import { type DiscordUser, saveDiscordSession } from "../contexts/AuthContext";
-import { useActor } from "../hooks/useActor";
 
 export function CallbackPage() {
-  const { actor, isFetching } = useActor();
   const [error, setError] = useState<string | null>(null);
   const hasCalledRef = useRef(false);
 
   useEffect(() => {
-    if (isFetching || !actor || hasCalledRef.current) return;
+    if (hasCalledRef.current) return;
     hasCalledRef.current = true;
 
     const params = new URLSearchParams(window.location.search);
@@ -24,15 +23,26 @@ export function CallbackPage() {
 
     (async () => {
       try {
+        // Create a fresh actor directly — bypass React Query to avoid class instance issues
+        const actor = await createActorWithConfig();
+
+        if (typeof actor.discordCallback !== "function") {
+          setError(
+            "Backend actor failed to initialize. Please reload and try again.",
+          );
+          return;
+        }
+
         const result = await actor.discordCallback(code, redirectUri);
-        // Candid variants come as { ok: value } or { err: message } — no __kind__
-        if ("ok" in result) {
+
+        // backend.ts wraps results with __kind__
+        if (result.__kind__ === "ok") {
           const data = result.ok as DiscordUser;
           saveDiscordSession(data);
           window.location.href = "/";
         } else {
           const errMsg =
-            "err" in result && result.err
+            result.__kind__ === "err" && result.err
               ? String(result.err)
               : "Access denied. You do not have a valid staff role on this server.";
           setError(errMsg);
@@ -43,7 +53,7 @@ export function CallbackPage() {
         setError(`Authentication error: ${msg}`);
       }
     })();
-  }, [actor, isFetching]);
+  }, []);
 
   return (
     <div
@@ -98,15 +108,11 @@ export function CallbackPage() {
                   border: "1px solid rgba(88, 101, 242, 0.3)",
                 }}
               >
-                {isFetching ? (
-                  <Loader2
-                    size={24}
-                    className="animate-spin"
-                    style={{ color: "#5865F2" }}
-                  />
-                ) : (
-                  <SiDiscord size={24} style={{ color: "#5865F2" }} />
-                )}
+                <Loader2
+                  size={24}
+                  className="animate-spin"
+                  style={{ color: "#5865F2" }}
+                />
               </div>
               <div>
                 <p
@@ -186,7 +192,7 @@ export function CallbackPage() {
                     lineHeight: 1.6,
                   }}
                 >
-                  Common causes: Bot not in server, role not assigned, or
+                  Common causes: Role not assigned in Discord server, or
                   redirect URI mismatch in Discord Developer Portal.
                 </p>
               </div>
