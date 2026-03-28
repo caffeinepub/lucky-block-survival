@@ -183,6 +183,21 @@ export type Result_7 = {
     __kind__: "err";
     err: string;
 };
+export interface DiscordSessionData {
+    token: string;
+    discordId: string;
+    username: string;
+    avatar: string;
+    role: string;
+    createdAt: bigint;
+}
+export type Result_8 = {
+    __kind__: "ok";
+    ok: DiscordSessionData;
+} | {
+    __kind__: "err";
+    err: string;
+};
 export interface LOARequest {
     id: bigint;
     ign: string;
@@ -236,8 +251,11 @@ export interface backendInterface {
     setWebhookConfig(punishmentUrl: string, loaUrl: string): Promise<Result_1>;
     submitLOARequest(ign: string, discordUsername: string, leaveDate: string, returnDate: string): Promise<Result>;
     submitPunishmentLog(ign: string, rnd: string, offenseNumber: bigint, proof: string): Promise<Result>;
+    discordCallback(code: string, redirectUri: string): Promise<Result_8>;
+    discordLogout(token: string): Promise<void>;
+    getDiscordSession(token: string): Promise<DiscordSessionData | null>;
 }
-import type { LOARequest as _LOARequest, PublicUser as _PublicUser, PunishmentLog as _PunishmentLog, Result as _Result, Result_1 as _Result_1, Result_2 as _Result_2, Result_3 as _Result_3, Result_4 as _Result_4, Result_5 as _Result_5, Result_6 as _Result_6, Result_7 as _Result_7, Role as _Role, UserId as _UserId, UserProfile as _UserProfile, UserRole as _UserRole, WebhookConfig as _WebhookConfig } from "./declarations/backend.did.d.ts";
+import type { DiscordSessionData as _DiscordSessionData, LOARequest as _LOARequest, PublicUser as _PublicUser, PunishmentLog as _PunishmentLog, Result as _Result, Result_1 as _Result_1, Result_2 as _Result_2, Result_3 as _Result_3, Result_4 as _Result_4, Result_5 as _Result_5, Result_6 as _Result_6, Result_7 as _Result_7, Result_8 as _Result_8, Role as _Role, UserId as _UserId, UserProfile as _UserProfile, UserRole as _UserRole, WebhookConfig as _WebhookConfig } from "./declarations/backend.did.d.ts";
 export class Backend implements backendInterface {
     constructor(private actor: ActorSubclass<_SERVICE>, private _uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, private _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, private processError?: (error: unknown) => never){}
     async _initializeAccessControlWithSecret(arg0: string): Promise<void> {
@@ -602,6 +620,48 @@ export class Backend implements backendInterface {
         } else {
             const result = await this.actor.submitPunishmentLog(arg0, arg1, arg2, arg3);
             return from_candid_Result_n31(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async discordCallback(arg0: string, arg1: string): Promise<Result_8> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.discordCallback(arg0, arg1);
+                return 'ok' in result ? { __kind__: 'ok', ok: result.ok } : { __kind__: 'err', err: result.err };
+            } catch (e) {
+                this.processError(e);
+                throw new Error('unreachable');
+            }
+        } else {
+            const result = await this.actor.discordCallback(arg0, arg1);
+            return 'ok' in result ? { __kind__: 'ok', ok: result.ok } : { __kind__: 'err', err: result.err };
+        }
+    }
+    async discordLogout(arg0: string): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.discordLogout(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error('unreachable');
+            }
+        } else {
+            const result = await this.actor.discordLogout(arg0);
+            return result;
+        }
+    }
+    async getDiscordSession(arg0: string): Promise<DiscordSessionData | null> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getDiscordSession(arg0);
+                return result.length === 0 ? null : result[0];
+            } catch (e) {
+                this.processError(e);
+                throw new Error('unreachable');
+            }
+        } else {
+            const result = await this.actor.getDiscordSession(arg0);
+            return result.length === 0 ? null : result[0];
         }
     }
 }

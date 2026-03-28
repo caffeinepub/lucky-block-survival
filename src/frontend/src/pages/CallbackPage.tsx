@@ -24,23 +24,23 @@ export function CallbackPage() {
 
     (async () => {
       try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const result = await (actor as any).discordCallback(code, redirectUri);
-        if (result?.__kind__ === "ok") {
+        const result = await actor.discordCallback(code, redirectUri);
+        // Candid variants come as { ok: value } or { err: message } — no __kind__
+        if ("ok" in result) {
           const data = result.ok as DiscordUser;
           saveDiscordSession(data);
           window.location.href = "/";
         } else {
           const errMsg =
-            result?.err ??
-            "Access denied. You may not have a valid staff role on this server.";
+            "err" in result && result.err
+              ? String(result.err)
+              : "Access denied. You do not have a valid staff role on this server.";
           setError(errMsg);
         }
       } catch (e) {
         console.error("Discord callback error:", e);
-        setError(
-          "Authentication failed. Please try again or contact an admin.",
-        );
+        const msg = e instanceof Error ? e.message : String(e);
+        setError(`Authentication error: ${msg}`);
       }
     })();
   }, [actor, isFetching]);
@@ -174,9 +174,20 @@ export function CallbackPage() {
                     fontSize: "12px",
                     color: "var(--text-secondary)",
                     lineHeight: 1.5,
+                    marginBottom: "10px",
                   }}
                 >
                   {error}
+                </p>
+                <p
+                  style={{
+                    fontSize: "10px",
+                    color: "var(--text-muted)",
+                    lineHeight: 1.6,
+                  }}
+                >
+                  Common causes: Bot not in server, role not assigned, or
+                  redirect URI mismatch in Discord Developer Portal.
                 </p>
               </div>
               <a

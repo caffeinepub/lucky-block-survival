@@ -37,7 +37,7 @@ export function LoginPage() {
     if (!agreed || loading) return;
     setLoading(true);
     window.location.href =
-      "https://discord.com/oauth2/authorize?client_id=1487232430279622879&response_type=code&redirect_uri=https%3A%2F%2Flucky-block-survival-o1t.caffeine.xyz%2Fcallback&scope=identify%20guilds";
+      "https://discord.com/oauth2/authorize?client_id=1487232430279622879&response_type=code&redirect_uri=https%3A%2F%2Flucky-block-survival-o1t.caffeine.xyz%2F&scope=identify+guilds.members.read";
   };
 
   return (

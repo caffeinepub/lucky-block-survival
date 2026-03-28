@@ -10,6 +10,14 @@ import type { ActorMethod } from '@icp-sdk/core/agent';
 import type { IDL } from '@icp-sdk/core/candid';
 import type { Principal } from '@icp-sdk/core/principal';
 
+export interface DiscordSessionData {
+  'token' : string,
+  'discordId' : string,
+  'username' : string,
+  'avatar' : string,
+  'role' : string,
+  'createdAt' : bigint,
+}
 export interface LOARequest {
   'id' : bigint,
   'ign' : string,
@@ -50,6 +58,8 @@ export type Result_5 = { 'ok' : Array<PunishmentLog> } |
 export type Result_6 = { 'ok' : Array<LOARequest> } |
   { 'err' : string };
 export type Result_7 = { 'ok' : UserId } |
+  { 'err' : string };
+export type Result_8 = { 'ok' : DiscordSessionData } |
   { 'err' : string };
 export type Role = { 'CoOwner' : null } |
   { 'StaffBuilder' : null } |
@@ -92,6 +102,8 @@ export interface _SERVICE {
     Result_7
   >,
   'deactivateLOA' : ActorMethod<[bigint], Result_1>,
+  'discordCallback' : ActorMethod<[string, string], Result_8>,
+  'discordLogout' : ActorMethod<[string], undefined>,
   'dummyTransform' : ActorMethod<[TransformationInput], TransformationOutput>,
   'getActiveLOACount' : ActorMethod<[], bigint>,
   'getAllLOARequests' : ActorMethod<[], Result_6>,
@@ -100,6 +112,7 @@ export interface _SERVICE {
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
   'getCurrentUser' : ActorMethod<[], Result_2>,
+  'getDiscordSession' : ActorMethod<[string], [] | [DiscordSessionData]>,
   'getPunishmentLogCount' : ActorMethod<[], bigint>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
   'getWebhookConfig' : ActorMethod<[], Result_3>,
