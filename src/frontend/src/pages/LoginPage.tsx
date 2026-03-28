@@ -5,8 +5,6 @@ import { Scroll, Shield } from "lucide-react";
 import { useState } from "react";
 import { SiDiscord } from "react-icons/si";
 
-const DISCORD_CLIENT_ID = "1487232430279622879";
-
 const STAFF_RULES = `STAFF RULES & EXPECTATIONS — Lucky Block Survival 4
 
 1. Professionalism & Conduct
@@ -38,9 +36,8 @@ export function LoginPage() {
   const handleDiscordLogin = () => {
     if (!agreed || loading) return;
     setLoading(true);
-    const redirectUri = encodeURIComponent(`${window.location.origin}/`);
-    const url = `https://discord.com/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&response_type=code&redirect_uri=${redirectUri}&scope=identify+guilds.members.read`;
-    window.location.href = url;
+    window.location.href =
+      "https://discord.com/oauth2/authorize?client_id=1487232430279622879&response_type=code&redirect_uri=https%3A%2F%2Flucky-block-survival-o1t.caffeine.xyz%2Fcallback&scope=identify%20guilds";
   };
 
   return (
