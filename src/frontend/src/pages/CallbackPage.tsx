@@ -1,8 +1,10 @@
+import { Actor, HttpAgent } from "@icp-sdk/core/agent";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { SiDiscord } from "react-icons/si";
-import { createActorWithConfig } from "../config";
+import { loadConfig } from "../config";
 import { type DiscordUser, saveDiscordSession } from "../contexts/AuthContext";
+import { idlFactory } from "../declarations/backend.did";
 
 export function CallbackPage() {
   const [error, setError] = useState<string | null>(null);
@@ -23,26 +25,36 @@ export function CallbackPage() {
 
     (async () => {
       try {
-        // Create a fresh actor directly — bypass React Query to avoid class instance issues
-        const actor = await createActorWithConfig();
-
-        if (typeof actor.discordCallback !== "function") {
-          setError(
-            "Backend actor failed to initialize. Please reload and try again.",
-          );
-          return;
+        const config = await loadConfig();
+        const agent = new HttpAgent({ host: config.backend_host });
+        if (config.backend_host?.includes("localhost")) {
+          await agent.fetchRootKey().catch(console.error);
         }
+        const rawActor = Actor.createActor(idlFactory, {
+          agent,
+          canisterId: config.backend_canister_id,
+        });
 
-        const result = await actor.discordCallback(code, redirectUri);
+        const result = await (rawActor as any).discordCallback(
+          code,
+          redirectUri,
+        );
 
-        // backend.ts wraps results with __kind__
-        if (result.__kind__ === "ok") {
-          const data = result.ok as DiscordUser;
+        if ("ok" in result) {
+          const raw = result.ok as any;
+          const data: DiscordUser = {
+            token: raw.token,
+            discordId: raw.discordId,
+            username: raw.username,
+            avatar: raw.avatar,
+            role: raw.role,
+            createdAt: raw.createdAt,
+          };
           saveDiscordSession(data);
           window.location.href = "/";
         } else {
           const errMsg =
-            result.__kind__ === "err" && result.err
+            "err" in result && result.err
               ? String(result.err)
               : "Access denied. You do not have a valid staff role on this server.";
           setError(errMsg);
