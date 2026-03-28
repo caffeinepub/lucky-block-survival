@@ -1,22 +1,21 @@
 import {
   AlertTriangle,
-  CheckCircle,
   ClipboardList,
+  Info,
   Loader2,
   Pencil,
   ScrollText,
   Search,
   Trash2,
-  XCircle,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { PublicUser } from "../backend.d";
 import {
   type LocalPunishmentLog,
-  addPunishmentLog,
   getAllPunishmentLogs,
 } from "../lib/portalData";
 import { type AuditEntry, getAuditEntries } from "../lib/punishmentAudit";
+import { EvidenceLightbox } from "./PunishmentLoggerPage";
 
 function formatTimestamp(ts: number): string {
   return new Date(ts).toLocaleString("en-US", {
@@ -38,12 +37,21 @@ function formatAuditTimestamp(ms: number): string {
   });
 }
 
+function getDurationColor(duration: string): string {
+  const lower = duration.toLowerCase();
+  if (lower.includes("perm") || lower.includes("ban")) return "#ef4444";
+  if (lower.includes("verbal") || lower.includes("warn")) return "#4ade80";
+  return "#f59e0b";
+}
+
 interface StaffLogsPageProps {
   currentUser: PublicUser;
 }
 
-export function StaffLogsPage({ currentUser }: StaffLogsPageProps) {
-  const [activeTab, setActiveTab] = useState<"view" | "log" | "audit">("view");
+export function StaffLogsPage({
+  currentUser: _currentUser,
+}: StaffLogsPageProps) {
+  const [activeTab, setActiveTab] = useState<"view" | "audit">("view");
 
   // View logs state
   const [logs, setLogs] = useState<LocalPunishmentLog[]>([]);
@@ -53,14 +61,10 @@ export function StaffLogsPage({ currentUser }: StaffLogsPageProps) {
   // Audit log state
   const [auditEntries, setAuditEntries] = useState<AuditEntry[]>([]);
 
-  // Log form state
-  const [ign, setIgn] = useState("");
-  const [rnd, setRnd] = useState("");
-  const [offenseNum, setOffenseNum] = useState("1");
-  const [proof, setProof] = useState("");
-  const [submitLoading, setSubmitLoading] = useState(false);
-  const [submitSuccess, setSubmitSuccess] = useState(false);
-  const [submitError, setSubmitError] = useState("");
+  // Lightbox state
+  const [lightboxLog, setLightboxLog] = useState<LocalPunishmentLog | null>(
+    null,
+  );
 
   const fetchLogs = () => {
     setLogsLoading(true);
@@ -84,56 +88,12 @@ export function StaffLogsPage({ currentUser }: StaffLogsPageProps) {
   const filteredLogs = logs.filter(
     (log) =>
       log.ign.toLowerCase().includes(search.toLowerCase()) ||
-      log.rnd.toLowerCase().includes(search.toLowerCase()),
+      log.rnd.toLowerCase().includes(search.toLowerCase()) ||
+      (log.category ?? "").toLowerCase().includes(search.toLowerCase()),
   );
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitLoading(true);
-    setSubmitError("");
-    setSubmitSuccess(false);
-    try {
-      const newLog = addPunishmentLog({
-        ign,
-        rnd,
-        offenseNumber: Number(offenseNum),
-        proof,
-        submittedBy: currentUser.username,
-      });
-
-      // Fire Discord webhook (best-effort, ignore errors)
-      const webhookUrl = localStorage.getItem("portal_webhook_punishment");
-      if (webhookUrl) {
-        try {
-          await fetch(webhookUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              content: `⚠️ **New Punishment Log** submitted by **${newLog.submittedBy}**\n**IGN:** ${newLog.ign}\n**Reason & Date:** ${newLog.rnd}\n**Offense #:** ${newLog.offenseNumber}\n**Proof:** ${newLog.proof || "N/A"}`,
-            }),
-          });
-        } catch {
-          // Webhook errors are ignored — log was saved locally regardless
-        }
-      }
-
-      setSubmitSuccess(true);
-      setIgn("");
-      setRnd("");
-      setOffenseNum("1");
-      setProof("");
-      fetchLogs();
-      setTimeout(() => setSubmitSuccess(false), 5000);
-    } catch {
-      setSubmitError("Failed to save log. Please try again.");
-    } finally {
-      setSubmitLoading(false);
-    }
-  };
 
   const TABS = [
     { id: "view" as const, label: "VIEW LOGS" },
-    { id: "log" as const, label: "LOG PUNISHMENT" },
     { id: "audit" as const, label: "AUDIT LOG" },
   ];
 
@@ -218,6 +178,26 @@ export function StaffLogsPage({ currentUser }: StaffLogsPageProps) {
       {/* =================== VIEW LOGS TAB =================== */}
       {activeTab === "view" && (
         <div>
+          {/* Redirect info banner */}
+          <div
+            data-ocid="staff_logs.logger_redirect_banner"
+            className="mb-5 flex items-start gap-3 rounded-md py-3 px-4"
+            style={{
+              background: "rgba(96, 165, 250, 0.06)",
+              border: "1px solid rgba(96, 165, 250, 0.25)",
+              fontSize: "12px",
+              color: "var(--text-muted)",
+            }}
+          >
+            <Info
+              size={14}
+              style={{ color: "#60a5fa", marginTop: "1px", flexShrink: 0 }}
+            />
+            To log a new punishment, use the{" "}
+            <strong style={{ color: "#60a5fa" }}>PUNISHMENT LOGGER</strong> page
+            in the sidebar.
+          </div>
+
           {/* Search */}
           <div className="relative mb-5" style={{ maxWidth: "400px" }}>
             <Search
@@ -230,7 +210,7 @@ export function StaffLogsPage({ currentUser }: StaffLogsPageProps) {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by IGN or Reason..."
+              placeholder="Search by IGN, Category or Reason..."
               style={{
                 width: "100%",
                 padding: "10px 14px 10px 38px",
@@ -289,7 +269,7 @@ export function StaffLogsPage({ currentUser }: StaffLogsPageProps) {
                   <p
                     style={{ fontSize: "11px", marginTop: "6px", opacity: 0.7 }}
                   >
-                    Use the "LOG PUNISHMENT" tab to add entries
+                    Use the Punishment Logger in the sidebar to add entries
                   </p>
                 )}
               </div>
@@ -298,81 +278,214 @@ export function StaffLogsPage({ currentUser }: StaffLogsPageProps) {
                 <table
                   data-ocid="staff_logs.table"
                   className="staff-table"
-                  style={{ minWidth: "800px" }}
+                  style={{ minWidth: "1000px" }}
                 >
                   <thead>
                     <tr>
                       <th>IGN</th>
-                      <th>REASON & DATE</th>
+                      <th>CATEGORY</th>
                       <th>OFFENSE</th>
+                      <th>DURATION</th>
+                      <th>REASON &amp; DATE</th>
+                      <th>ALTS</th>
                       <th>PROOF</th>
                       <th>SUBMITTED BY</th>
                       <th>TIMESTAMP</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredLogs.map((log, idx) => (
-                      <tr
-                        key={String(log.id)}
-                        data-ocid={
-                          idx < 3 ? `staff_logs.row.${idx + 1}` : undefined
-                        }
-                      >
-                        <td style={{ fontWeight: 700 }}>{log.ign}</td>
-                        <td
-                          style={{
-                            fontSize: "12px",
-                            color: "var(--text-muted)",
-                            maxWidth: "180px",
-                            wordBreak: "break-word",
-                          }}
+                    {filteredLogs.map((log, idx) => {
+                      const dur = log.duration ?? "";
+                      const durColor = dur
+                        ? getDurationColor(dur)
+                        : "var(--text-muted)";
+                      return (
+                        <tr
+                          key={String(log.id)}
+                          data-ocid={
+                            idx < 3 ? `staff_logs.row.${idx + 1}` : undefined
+                          }
                         >
-                          {log.rnd}
-                        </td>
-                        <td>
-                          <span
-                            className="font-pixel"
+                          {/* IGN */}
+                          <td style={{ fontWeight: 700 }}>{log.ign}</td>
+
+                          {/* CATEGORY */}
+                          <td>
+                            {log.category ? (
+                              <span
+                                className="font-pixel"
+                                style={{
+                                  fontSize: "9px",
+                                  background: "rgba(124,58,237,0.12)",
+                                  border: "1px solid rgba(124,58,237,0.3)",
+                                  color: "var(--accent-purple-bright)",
+                                  padding: "2px 6px",
+                                  borderRadius: "3px",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                {log.category}
+                              </span>
+                            ) : (
+                              <span style={{ opacity: 0.4 }}>—</span>
+                            )}
+                          </td>
+
+                          {/* OFFENSE */}
+                          <td>
+                            <span
+                              className="font-pixel"
+                              style={{
+                                fontSize: "9px",
+                                background: "rgba(124, 58, 237, 0.15)",
+                                border: "1px solid rgba(124, 58, 237, 0.3)",
+                                color: "var(--accent-purple-bright)",
+                                padding: "2px 6px",
+                                borderRadius: "3px",
+                              }}
+                            >
+                              #{String(log.offenseLevel ?? log.offenseNumber)}
+                            </span>
+                          </td>
+
+                          {/* DURATION */}
+                          <td>
+                            {dur ? (
+                              <span
+                                style={{
+                                  fontSize: "11px",
+                                  fontWeight: 700,
+                                  color: durColor,
+                                  fontFamily: '"JetBrains Mono", monospace',
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                {dur}
+                              </span>
+                            ) : (
+                              <span style={{ opacity: 0.4 }}>—</span>
+                            )}
+                          </td>
+
+                          {/* REASON */}
+                          <td
                             style={{
-                              fontSize: "9px",
-                              background: "rgba(124, 58, 237, 0.15)",
-                              border: "1px solid rgba(124, 58, 237, 0.3)",
-                              color: "var(--accent-purple-bright)",
-                              padding: "2px 6px",
-                              borderRadius: "3px",
+                              fontSize: "12px",
+                              color: "var(--text-muted)",
+                              maxWidth: "180px",
+                              wordBreak: "break-word",
                             }}
                           >
-                            #{String(log.offenseNumber)}
-                          </span>
-                        </td>
-                        <td
-                          style={{
-                            fontSize: "12px",
-                            color: "var(--text-muted)",
-                            maxWidth: "160px",
-                            wordBreak: "break-word",
-                          }}
-                        >
-                          {log.proof || <span style={{ opacity: 0.4 }}>—</span>}
-                        </td>
-                        <td
-                          style={{
-                            fontSize: "12px",
-                            color: "var(--text-muted)",
-                          }}
-                        >
-                          {log.submittedBy}
-                        </td>
-                        <td
-                          style={{
-                            fontSize: "11px",
-                            color: "var(--text-muted)",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {formatTimestamp(log.timestamp)}
-                        </td>
-                      </tr>
-                    ))}
+                            {log.rnd}
+                          </td>
+
+                          {/* ALTS */}
+                          <td
+                            style={{
+                              fontSize: "11px",
+                              color: "var(--text-muted)",
+                              maxWidth: "120px",
+                            }}
+                          >
+                            {log.alts && log.alts.length > 0 ? (
+                              <span title={log.alts.join(", ")}>
+                                {log.alts.slice(0, 2).join(", ")}
+                                {log.alts.length > 2 &&
+                                  ` +${log.alts.length - 2}`}
+                              </span>
+                            ) : (
+                              <span style={{ opacity: 0.4 }}>—</span>
+                            )}
+                          </td>
+
+                          {/* PROOF */}
+                          <td>
+                            {log.proofBase64 &&
+                            log.proofMimeType?.startsWith("image/") ? (
+                              <button
+                                type="button"
+                                data-ocid={
+                                  idx < 3
+                                    ? `staff_logs.evidence_thumbnail.${idx + 1}`
+                                    : undefined
+                                }
+                                onClick={() => setLightboxLog(log)}
+                                style={{
+                                  padding: 0,
+                                  background: "none",
+                                  border: "1px solid var(--border-subtle)",
+                                  borderRadius: "3px",
+                                  cursor: "pointer",
+                                  overflow: "hidden",
+                                }}
+                              >
+                                <img
+                                  src={log.proofBase64}
+                                  alt="Evidence"
+                                  style={{
+                                    height: "24px",
+                                    width: "32px",
+                                    objectFit: "cover",
+                                    display: "block",
+                                  }}
+                                />
+                              </button>
+                            ) : log.proofFileName ? (
+                              <span
+                                className="flex items-center gap-1"
+                                style={{
+                                  fontSize: "10px",
+                                  color: "var(--text-muted)",
+                                }}
+                              >
+                                <AlertTriangle
+                                  size={10}
+                                  style={{ opacity: 0.5 }}
+                                />
+                                {log.proofFileName.length > 14
+                                  ? `${log.proofFileName.slice(0, 12)}…`
+                                  : log.proofFileName}
+                              </span>
+                            ) : log.proof ? (
+                              <span
+                                style={{
+                                  fontSize: "12px",
+                                  color: "var(--text-muted)",
+                                  maxWidth: "120px",
+                                  wordBreak: "break-word",
+                                  display: "block",
+                                }}
+                              >
+                                {log.proof}
+                              </span>
+                            ) : (
+                              <span style={{ opacity: 0.4 }}>—</span>
+                            )}
+                          </td>
+
+                          {/* SUBMITTED BY */}
+                          <td
+                            style={{
+                              fontSize: "12px",
+                              color: "var(--text-muted)",
+                            }}
+                          >
+                            {log.submittedBy}
+                          </td>
+
+                          {/* TIMESTAMP */}
+                          <td
+                            style={{
+                              fontSize: "11px",
+                              color: "var(--text-muted)",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {formatTimestamp(log.timestamp)}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -388,283 +501,6 @@ export function StaffLogsPage({ currentUser }: StaffLogsPageProps) {
               {search && ` matching "${search}"`}
             </p>
           )}
-        </div>
-      )}
-
-      {/* =================== LOG PUNISHMENT TAB =================== */}
-      {activeTab === "log" && (
-        <div style={{ maxWidth: "600px" }}>
-          {/* Disclaimer banner */}
-          <div className="disclaimer-banner mb-6 flex items-center gap-2">
-            <AlertTriangle size={16} style={{ flexShrink: 0 }} />⚠ LOG HERE OR
-            THE PLAYER REMAINS UNPUNISHED.
-          </div>
-
-          {/* Form card */}
-          <div className="neon-card" style={{ padding: "28px 32px" }}>
-            <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-              {/* IGN */}
-              <div>
-                <label
-                  htmlFor="log-ign"
-                  className="block font-pixel mb-2"
-                  style={{
-                    fontSize: "9px",
-                    color: "var(--text-muted)",
-                    letterSpacing: "0.1em",
-                  }}
-                >
-                  IGN — PLAYER IN-GAME NAME
-                </label>
-                <input
-                  id="log-ign"
-                  data-ocid="punishment_logger.ign_input"
-                  type="text"
-                  value={ign}
-                  onChange={(e) => setIgn(e.target.value)}
-                  placeholder="e.g. BloomCPVP"
-                  required
-                  style={{
-                    width: "100%",
-                    padding: "10px 14px",
-                    background: "var(--bg-deep)",
-                    border: "1px solid var(--border-subtle)",
-                    borderRadius: "6px",
-                    color: "var(--text-primary)",
-                    fontSize: "13px",
-                    outline: "none",
-                    transition: "border-color 0.2s, box-shadow 0.2s",
-                  }}
-                  onFocus={(e) => {
-                    e.target.style.borderColor = "var(--border-glow)";
-                    e.target.style.boxShadow =
-                      "0 0 8px var(--accent-purple-glow)";
-                  }}
-                  onBlur={(e) => {
-                    e.target.style.borderColor = "var(--border-subtle)";
-                    e.target.style.boxShadow = "none";
-                  }}
-                />
-              </div>
-
-              {/* R&D */}
-              <div>
-                <label
-                  htmlFor="log-rnd"
-                  className="block font-pixel mb-2"
-                  style={{
-                    fontSize: "9px",
-                    color: "var(--text-muted)",
-                    letterSpacing: "0.1em",
-                  }}
-                >
-                  R&D — REASON & DATE / PUNISHMENT TIME
-                </label>
-                <input
-                  id="log-rnd"
-                  data-ocid="punishment_logger.rnd_input"
-                  type="text"
-                  value={rnd}
-                  onChange={(e) => setRnd(e.target.value)}
-                  placeholder="e.g. Hacking, 1d ban 12/01/26"
-                  required
-                  style={{
-                    width: "100%",
-                    padding: "10px 14px",
-                    background: "var(--bg-deep)",
-                    border: "1px solid var(--border-subtle)",
-                    borderRadius: "6px",
-                    color: "var(--text-primary)",
-                    fontSize: "13px",
-                    outline: "none",
-                    transition: "border-color 0.2s, box-shadow 0.2s",
-                  }}
-                  onFocus={(e) => {
-                    e.target.style.borderColor = "var(--border-glow)";
-                    e.target.style.boxShadow =
-                      "0 0 8px var(--accent-purple-glow)";
-                  }}
-                  onBlur={(e) => {
-                    e.target.style.borderColor = "var(--border-subtle)";
-                    e.target.style.boxShadow = "none";
-                  }}
-                />
-              </div>
-
-              {/* Offense # */}
-              <div>
-                <label
-                  htmlFor="log-offense"
-                  className="block font-pixel mb-2"
-                  style={{
-                    fontSize: "9px",
-                    color: "var(--text-muted)",
-                    letterSpacing: "0.1em",
-                  }}
-                >
-                  OFFENSE NUMBER (1–5)
-                </label>
-                <select
-                  id="log-offense"
-                  data-ocid="punishment_logger.offense_select"
-                  value={offenseNum}
-                  onChange={(e) => setOffenseNum(e.target.value)}
-                  required
-                  style={{
-                    width: "100%",
-                    padding: "10px 14px",
-                    background: "var(--bg-deep)",
-                    border: "1px solid var(--border-subtle)",
-                    borderRadius: "6px",
-                    color: "var(--text-primary)",
-                    fontSize: "13px",
-                    outline: "none",
-                    cursor: "pointer",
-                  }}
-                >
-                  {[1, 2, 3, 4, 5].map((n) => (
-                    <option
-                      key={n}
-                      value={n}
-                      style={{ background: "var(--bg-deep)" }}
-                    >
-                      Offense #{n}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Proof */}
-              <div>
-                <label
-                  htmlFor="log-proof"
-                  className="block font-pixel mb-2"
-                  style={{
-                    fontSize: "9px",
-                    color: "var(--text-muted)",
-                    letterSpacing: "0.1em",
-                  }}
-                >
-                  PROOF / EVIDENCE
-                </label>
-                <textarea
-                  id="log-proof"
-                  data-ocid="punishment_logger.proof_textarea"
-                  value={proof}
-                  onChange={(e) => setProof(e.target.value)}
-                  placeholder="Proof / Evidence (text or link)"
-                  rows={4}
-                  style={{
-                    width: "100%",
-                    padding: "10px 14px",
-                    background: "var(--bg-deep)",
-                    border: "1px solid var(--border-subtle)",
-                    borderRadius: "6px",
-                    color: "var(--text-primary)",
-                    fontSize: "13px",
-                    outline: "none",
-                    resize: "vertical",
-                    fontFamily: "inherit",
-                    transition: "border-color 0.2s, box-shadow 0.2s",
-                  }}
-                  onFocus={(e) => {
-                    e.target.style.borderColor = "var(--border-glow)";
-                    e.target.style.boxShadow =
-                      "0 0 8px var(--accent-purple-glow)";
-                  }}
-                  onBlur={(e) => {
-                    e.target.style.borderColor = "var(--border-subtle)";
-                    e.target.style.boxShadow = "none";
-                  }}
-                />
-              </div>
-
-              {/* Example */}
-              <p
-                style={{
-                  fontSize: "11px",
-                  color: "var(--text-muted)",
-                  fontStyle: "italic",
-                }}
-              >
-                Example: IGN: BloomCPVP | R&D: Hacking, 1d ban 12/01/26 |
-                Offense: 1 | Proof: (description)
-              </p>
-
-              {/* States */}
-              {submitSuccess && (
-                <div
-                  data-ocid="punishment_logger.success_state"
-                  className="flex items-center gap-2 rounded-md py-3 px-4"
-                  style={{
-                    background: "rgba(74, 222, 128, 0.1)",
-                    border: "1px solid rgba(74, 222, 128, 0.4)",
-                    color: "#4ade80",
-                    fontSize: "12px",
-                  }}
-                >
-                  <CheckCircle size={14} />
-                  Punishment log submitted successfully!
-                </div>
-              )}
-
-              {submitError && (
-                <div
-                  data-ocid="punishment_logger.error_state"
-                  className="flex items-center gap-2 rounded-md py-3 px-4"
-                  style={{
-                    background: "rgba(239, 68, 68, 0.1)",
-                    border: "1px solid rgba(239, 68, 68, 0.4)",
-                    color: "#ef4444",
-                    fontSize: "12px",
-                  }}
-                >
-                  <XCircle size={14} />
-                  {submitError}
-                </div>
-              )}
-
-              {/* Submit */}
-              <button
-                data-ocid="punishment_logger.submit_button"
-                type="submit"
-                disabled={submitLoading}
-                className="btn-neon flex items-center justify-center gap-2 py-3 rounded-md"
-                style={{ fontSize: "11px", opacity: submitLoading ? 0.7 : 1 }}
-              >
-                {submitLoading ? (
-                  <>
-                    <Loader2 size={14} className="animate-spin" />
-                    SUBMITTING...
-                  </>
-                ) : (
-                  <>
-                    <ScrollText size={14} />
-                    SUBMIT LOG
-                  </>
-                )}
-              </button>
-            </form>
-          </div>
-
-          {/* Footer note */}
-          <div
-            className="mt-4 flex items-start gap-2 rounded-md py-3 px-4"
-            style={{
-              background: "rgba(148, 163, 184, 0.05)",
-              border: "1px solid rgba(148, 163, 184, 0.15)",
-              fontSize: "11px",
-              color: "var(--text-muted)",
-              fontStyle: "italic",
-            }}
-          >
-            <AlertTriangle
-              size={12}
-              style={{ marginTop: "2px", flexShrink: 0, color: "#f59e0b" }}
-            />
-            Not following the required format multiple times may result in a
-            minor strike or warning.
-          </div>
         </div>
       )}
 
@@ -809,6 +645,16 @@ export function StaffLogsPage({ currentUser }: StaffLogsPageProps) {
             </p>
           )}
         </div>
+      )}
+
+      {/* Evidence Lightbox */}
+      {lightboxLog?.proofBase64 && (
+        <EvidenceLightbox
+          src={lightboxLog?.proofBase64 ?? ""}
+          mimeType={lightboxLog?.proofMimeType ?? ""}
+          fileName={lightboxLog?.proofFileName ?? "evidence"}
+          onClose={() => setLightboxLog(null)}
+        />
       )}
 
       {/* Footer */}

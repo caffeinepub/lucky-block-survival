@@ -1,8 +1,11 @@
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   CheckCircle,
   Copy,
   Download,
   Loader2,
+  Minus,
   Plus,
   RefreshCw,
   ScrollText,
@@ -12,20 +15,29 @@ import {
   Upload,
   Users,
   Webhook,
+  Wrench,
   XCircle,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { PublicUser } from "../backend.d";
 import { Role } from "../backend.d";
 import {
+  getMaintenanceMode,
+  getWebhookConfig,
+  saveWebhookConfig,
+  setMaintenanceMode,
+} from "../lib/moderationSettings";
+import {
   type LocalPunishmentLog,
   getAllPunishmentLogs,
 } from "../lib/portalData";
 import {
   type StaffAccount,
+  addStrike,
   createAccount,
   getAllAccounts,
   removeAccount,
+  removeStrike,
 } from "../lib/staffAccounts";
 import { generateSyncCode, importSyncCode } from "../lib/syncCode";
 
@@ -69,13 +81,167 @@ function formatLogTimestamp(ts: number): string {
   });
 }
 
+// ---- Strike Progress Bar Component -----------------------------------------
+
+function StrikeBar({
+  strikes,
+  userId,
+  currentUserRole,
+  onStrikeChange,
+}: {
+  strikes: number;
+  userId: number;
+  currentUserRole: Role;
+  onStrikeChange: () => void;
+}) {
+  const count = strikes ?? 0;
+
+  function getSegmentColor(segIndex: number): string {
+    if (segIndex >= count) return "rgba(148,163,184,0.2)";
+    if (count === 1) return "#22c55e";
+    if (count === 2) return "#f97316";
+    return "#ef4444"; // 3 strikes
+  }
+
+  const canAdd =
+    currentUserRole === Role.Owner || currentUserRole === Role.CoOwner;
+  const canRemove = currentUserRole === Role.Owner;
+
+  const handleAdd = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (count >= 3) return;
+    addStrike(userId);
+    onStrikeChange();
+  };
+
+  const handleRemove = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (count <= 0) return;
+    removeStrike(userId);
+    onStrikeChange();
+  };
+
+  return (
+    <div className="flex items-center gap-2 mt-1.5">
+      {/* 3 segment bar */}
+      <div className="flex gap-1">
+        {[0, 1, 2].map((i) => (
+          <div
+            key={i}
+            style={{
+              width: "28px",
+              height: "8px",
+              borderRadius: "3px",
+              background: getSegmentColor(i),
+              transition: "background 0.25s",
+              boxShadow:
+                i < count && count === 3
+                  ? "0 0 6px rgba(239,68,68,0.6)"
+                  : "none",
+            }}
+          />
+        ))}
+      </div>
+
+      {/* REVIEW badge */}
+      {count >= 3 && (
+        <span
+          className="font-pixel"
+          style={{
+            fontSize: "7px",
+            padding: "2px 5px",
+            borderRadius: "3px",
+            background: "rgba(239,68,68,0.15)",
+            border: "1px solid rgba(239,68,68,0.5)",
+            color: "#ef4444",
+            letterSpacing: "0.06em",
+            animation: "pulse 1.5s ease-in-out infinite",
+          }}
+        >
+          REVIEW
+        </span>
+      )}
+
+      <span
+        style={{
+          fontSize: "10px",
+          fontFamily: '"JetBrains Mono", monospace',
+          color:
+            count === 0
+              ? "var(--text-muted)"
+              : count === 3
+                ? "#ef4444"
+                : count === 2
+                  ? "#f97316"
+                  : "#22c55e",
+          minWidth: "14px",
+        }}
+      >
+        {count}/3
+      </span>
+
+      {/* Controls */}
+      {canAdd && (
+        <button
+          type="button"
+          data-ocid="admin.staff.strike_add_button"
+          onClick={handleAdd}
+          disabled={count >= 3}
+          title="Add strike"
+          style={{
+            width: "18px",
+            height: "18px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background:
+              count >= 3 ? "rgba(148,163,184,0.05)" : "rgba(239,68,68,0.08)",
+            border: `1px solid ${count >= 3 ? "rgba(148,163,184,0.15)" : "rgba(239,68,68,0.3)"}`,
+            borderRadius: "3px",
+            color: count >= 3 ? "var(--text-muted)" : "#ef4444",
+            cursor: count >= 3 ? "not-allowed" : "pointer",
+            padding: 0,
+          }}
+        >
+          <Plus size={10} />
+        </button>
+      )}
+      {canRemove && (
+        <button
+          type="button"
+          data-ocid="admin.staff.strike_remove_button"
+          onClick={handleRemove}
+          disabled={count <= 0}
+          title="Remove strike"
+          style={{
+            width: "18px",
+            height: "18px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background:
+              count <= 0 ? "rgba(148,163,184,0.05)" : "rgba(74,222,128,0.08)",
+            border: `1px solid ${count <= 0 ? "rgba(148,163,184,0.15)" : "rgba(74,222,128,0.3)"}`,
+            borderRadius: "3px",
+            color: count <= 0 ? "var(--text-muted)" : "#4ade80",
+            cursor: count <= 0 ? "not-allowed" : "pointer",
+            padding: 0,
+          }}
+        >
+          <Minus size={10} />
+        </button>
+      )}
+    </div>
+  );
+}
+
 interface AdminPanelPageProps {
   currentUser: PublicUser;
 }
 
 export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
   const [activeTab, setActiveTab] = useState<
-    "staff" | "webhook" | "logs" | "sync"
+    "staff" | "webhook" | "logs" | "sync" | "maintenance"
   >("staff");
 
   // Staff management
@@ -92,7 +258,8 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
   const [createError, setCreateError] = useState("");
 
   // Webhook config
-  const [punishmentWebhook, setPunishmentWebhook] = useState("");
+  const [webhookUrl, setWebhookUrl] = useState("");
+  const [webhookEnabled, setWebhookEnabled] = useState(false);
   const [loaWebhook, setLoaWebhook] = useState("");
   const [webhookLoading, setWebhookLoading] = useState(false);
   const [webhookSaveSuccess, setWebhookSaveSuccess] = useState(false);
@@ -101,6 +268,9 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
   // All logs
   const [logs, setLogs] = useState<LocalPunishmentLog[]>([]);
   const [logsLoading, setLogsLoading] = useState(true);
+
+  // Maintenance mode
+  const [maintenanceMode, setMaintenanceModeState] = useState(false);
 
   // Sync
   const [syncCode, setSyncCode] = useState("");
@@ -123,9 +293,10 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
   };
 
   const fetchWebhookConfig = () => {
-    const punishment = localStorage.getItem("portal_webhook_punishment") ?? "";
+    const config = getWebhookConfig();
+    setWebhookUrl(config.url);
+    setWebhookEnabled(config.enabled);
     const loa = localStorage.getItem("portal_webhook_loa") ?? "";
-    setPunishmentWebhook(punishment);
     setLoaWebhook(loa);
   };
 
@@ -138,12 +309,17 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
     }
   };
 
+  const fetchMaintenance = () => {
+    setMaintenanceModeState(getMaintenanceMode());
+  };
+
   // biome-ignore lint/correctness/useExhaustiveDependencies: fetch functions are defined inside component and stable per render
   useEffect(() => {
     if (!isOwner) return;
     if (activeTab === "staff") fetchUsers();
     if (activeTab === "webhook") fetchWebhookConfig();
     if (activeTab === "logs") fetchLogs();
+    if (activeTab === "maintenance") fetchMaintenance();
   }, [activeTab, isOwner]);
 
   const handleCreateAccount = async (e: React.FormEvent) => {
@@ -184,7 +360,7 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
     setWebhookSaveError("");
     setWebhookSaveSuccess(false);
     try {
-      localStorage.setItem("portal_webhook_punishment", punishmentWebhook);
+      saveWebhookConfig({ url: webhookUrl, enabled: webhookEnabled });
       localStorage.setItem("portal_webhook_loa", loaWebhook);
       setWebhookSaveSuccess(true);
       setTimeout(() => setWebhookSaveSuccess(false), 3000);
@@ -193,6 +369,11 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
     } finally {
       setWebhookLoading(false);
     }
+  };
+
+  const handleToggleMaintenance = (enabled: boolean) => {
+    setMaintenanceMode(enabled);
+    setMaintenanceModeState(enabled);
   };
 
   const handleGenerateSyncCode = () => {
@@ -208,7 +389,6 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
       setCopySuccess(true);
       setTimeout(() => setCopySuccess(false), 2000);
     } catch {
-      // Fallback: select the textarea
       syncTextareaRef.current?.select();
     }
   };
@@ -223,10 +403,13 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
     const result = importSyncCode(importInput);
     if (result.success) {
       setImportResult(
-        `Imported: ${result.accountsAdded} account${result.accountsAdded !== 1 ? "s" : ""}, ${result.logsAdded} log${result.logsAdded !== 1 ? "s" : ""}, ${result.loasAdded} LOA${result.loasAdded !== 1 ? "s" : ""} added.`,
+        `Imported: ${result.accountsAdded} account${
+          result.accountsAdded !== 1 ? "s" : ""
+        }, ${result.logsAdded} log${
+          result.logsAdded !== 1 ? "s" : ""
+        }, ${result.loasAdded} LOA${result.loasAdded !== 1 ? "s" : ""} added.`,
       );
       setImportInput("");
-      // Refresh users if we're on staff tab
       fetchUsers();
     } else {
       setImportError(result.error ?? "Import failed.");
@@ -257,7 +440,7 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
   const TABS = [
     {
       id: "staff" as const,
-      label: "STAFF MANAGEMENT",
+      label: "ROLES & STRIKES",
       icon: <Users size={13} />,
       ocid: "admin.staff_management_tab",
     },
@@ -278,6 +461,12 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
       label: "SYNC DATA",
       icon: <RefreshCw size={13} />,
       ocid: "admin.sync_tab",
+    },
+    {
+      id: "maintenance" as const,
+      label: "MAINTENANCE",
+      icon: <Wrench size={13} />,
+      ocid: "admin.maintenance_tab",
     },
   ];
 
@@ -638,7 +827,7 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
                 <table className="staff-table">
                   <thead>
                     <tr>
-                      <th>USERNAME</th>
+                      <th>USERNAME &amp; STRIKES</th>
                       <th>ROLE</th>
                       <th>CREATED AT</th>
                       <th>ID</th>
@@ -654,22 +843,30 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
                         }
                       >
                         <td style={{ fontWeight: 700 }}>
-                          {user.username}
-                          {user.username === currentUser.username && (
-                            <span
-                              className="ml-2 font-pixel"
-                              style={{
-                                fontSize: "8px",
-                                background: "rgba(245, 158, 11, 0.15)",
-                                border: "1px solid rgba(245, 158, 11, 0.3)",
-                                color: "#f59e0b",
-                                padding: "1px 5px",
-                                borderRadius: "3px",
-                              }}
-                            >
-                              YOU
-                            </span>
-                          )}
+                          <div>
+                            <span>{user.username}</span>
+                            {user.username === currentUser.username && (
+                              <span
+                                className="ml-2 font-pixel"
+                                style={{
+                                  fontSize: "8px",
+                                  background: "rgba(245, 158, 11, 0.15)",
+                                  border: "1px solid rgba(245, 158, 11, 0.3)",
+                                  color: "#f59e0b",
+                                  padding: "1px 5px",
+                                  borderRadius: "3px",
+                                }}
+                              >
+                                YOU
+                              </span>
+                            )}
+                            <StrikeBar
+                              strikes={user.strikes ?? 0}
+                              userId={user.id}
+                              currentUserRole={currentUser.role}
+                              onStrikeChange={fetchUsers}
+                            />
+                          </div>
                         </td>
                         <td>
                           <span
@@ -778,6 +975,56 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
             </p>
           </div>
 
+          {/* Auto-send toggle */}
+          <div
+            className="neon-card mb-5 flex items-center justify-between"
+            style={{ padding: "18px 24px" }}
+          >
+            <div>
+              <p
+                className="font-pixel"
+                style={{
+                  fontSize: "10px",
+                  color: "var(--text-primary)",
+                  letterSpacing: "0.08em",
+                }}
+              >
+                AUTO-SEND TO DISCORD
+              </p>
+              <p
+                style={{
+                  fontSize: "12px",
+                  color: "var(--text-muted)",
+                  marginTop: "4px",
+                }}
+              >
+                Auto-send to Discord when punishment is logged.
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <Label
+                htmlFor="webhook-toggle"
+                style={{
+                  fontSize: "10px",
+                  fontFamily: '"JetBrains Mono", monospace',
+                  fontWeight: 700,
+                  color: webhookEnabled ? "#4ade80" : "var(--text-muted)",
+                }}
+              >
+                {webhookEnabled ? "ON" : "OFF"}
+              </Label>
+              <Switch
+                id="webhook-toggle"
+                data-ocid="admin.webhook_enabled_toggle"
+                checked={webhookEnabled}
+                onCheckedChange={(checked) => {
+                  setWebhookEnabled(checked);
+                  saveWebhookConfig({ url: webhookUrl, enabled: checked });
+                }}
+              />
+            </div>
+          </div>
+
           <form
             onSubmit={handleSaveWebhook}
             className="neon-card flex flex-col gap-5"
@@ -799,8 +1046,8 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
                 id="admin-punishment-webhook"
                 data-ocid="admin.punishment_webhook_input"
                 type="text"
-                value={punishmentWebhook}
-                onChange={(e) => setPunishmentWebhook(e.target.value)}
+                value={webhookUrl}
+                onChange={(e) => setWebhookUrl(e.target.value)}
                 placeholder="https://discord.com/api/webhooks/..."
                 style={inputStyle}
                 onFocus={handleFocus}
@@ -925,7 +1172,7 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
                   <thead>
                     <tr>
                       <th>IGN</th>
-                      <th>REASON & DATE</th>
+                      <th>REASON &amp; DATE</th>
                       <th>OFFENSE</th>
                       <th>PROOF</th>
                       <th>SUBMITTED BY</th>
@@ -1014,7 +1261,6 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
       {/* =================== SYNC TAB =================== */}
       {activeTab === "sync" && (
         <div style={{ maxWidth: "640px" }}>
-          {/* Info banner */}
           <div
             className="rounded-lg mb-6 flex items-start gap-3"
             style={{
@@ -1034,7 +1280,6 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
             </p>
           </div>
 
-          {/* EXPORT section */}
           <div className="neon-card mb-6" style={{ padding: "28px 32px" }}>
             <h3
               className="font-pixel mb-2"
@@ -1135,7 +1380,6 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
             )}
           </div>
 
-          {/* IMPORT section */}
           <div className="neon-card" style={{ padding: "28px 32px" }}>
             <h3
               className="font-pixel mb-2"
@@ -1238,6 +1482,110 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
                 }}
               >
                 <XCircle size={14} /> {importError}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* =================== MAINTENANCE TAB =================== */}
+      {activeTab === "maintenance" && (
+        <div style={{ maxWidth: "560px" }}>
+          {/* Info banner */}
+          <div
+            className="rounded-lg mb-6 flex items-start gap-3"
+            style={{
+              background: "rgba(239, 68, 68, 0.06)",
+              border: "1px solid rgba(239, 68, 68, 0.25)",
+              padding: "12px 16px",
+            }}
+          >
+            <Wrench
+              size={14}
+              style={{ color: "#ef4444", marginTop: "2px", flexShrink: 0 }}
+            />
+            <p style={{ fontSize: "12px", color: "var(--text-muted)" }}>
+              Maintenance Mode makes the system read-only for all staff. Only
+              the Owner can submit punishments or override actions while
+              maintenance is active.
+            </p>
+          </div>
+
+          <div className="neon-card" style={{ padding: "32px 36px" }}>
+            {/* Big toggle section */}
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3
+                  className="font-pixel"
+                  style={{
+                    fontSize: "13px",
+                    letterSpacing: "0.1em",
+                    color: maintenanceMode ? "#ef4444" : "var(--text-primary)",
+                    marginBottom: "6px",
+                  }}
+                >
+                  MAINTENANCE MODE
+                </h3>
+                <span
+                  data-ocid="admin.maintenance.status_badge"
+                  className="font-pixel"
+                  style={{
+                    fontSize: "9px",
+                    padding: "3px 10px",
+                    borderRadius: "4px",
+                    background: maintenanceMode
+                      ? "rgba(239, 68, 68, 0.15)"
+                      : "rgba(74, 222, 128, 0.1)",
+                    border: maintenanceMode
+                      ? "1px solid rgba(239, 68, 68, 0.4)"
+                      : "1px solid rgba(74, 222, 128, 0.3)",
+                    color: maintenanceMode ? "#ef4444" : "#4ade80",
+                  }}
+                >
+                  {maintenanceMode ? "ON" : "OFF"}
+                </span>
+              </div>
+              <Switch
+                id="maintenance-toggle"
+                data-ocid="admin.maintenance.toggle"
+                checked={maintenanceMode}
+                onCheckedChange={handleToggleMaintenance}
+                style={{
+                  // Style via CSS variables for the red glow
+                  filter: maintenanceMode
+                    ? "drop-shadow(0 0 6px rgba(239,68,68,0.5))"
+                    : "none",
+                }}
+              />
+            </div>
+
+            <p
+              style={{
+                fontSize: "13px",
+                color: "var(--text-muted)",
+                lineHeight: 1.7,
+                borderTop: "1px solid var(--border-subtle)",
+                paddingTop: "16px",
+              }}
+            >
+              When enabled, all staff submissions are disabled system-wide. Only
+              the Owner can override.
+            </p>
+
+            {maintenanceMode && (
+              <div
+                data-ocid="admin.maintenance.active_warning"
+                className="mt-4 flex items-center gap-2 rounded-md py-3 px-4"
+                style={{
+                  background: "rgba(239, 68, 68, 0.1)",
+                  border: "1px solid rgba(239, 68, 68, 0.4)",
+                  color: "#ef4444",
+                  fontSize: "12px",
+                  animation: "pulse 2s ease-in-out infinite",
+                }}
+              >
+                <Wrench size={14} /> System is currently in maintenance mode.
+                All staff submissions are blocked.
               </div>
             )}
           </div>

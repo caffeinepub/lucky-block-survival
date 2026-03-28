@@ -2,67 +2,28 @@ import { Toaster } from "@/components/ui/sonner";
 import { useState } from "react";
 import type { PublicUser } from "./backend.d";
 import { Layout } from "./components/Layout";
-import { useActor } from "./hooks/useActor";
-import { ensureOwnerExists } from "./lib/staffAccounts";
-
-// Seed owner account on app startup (runs once, idempotent)
-ensureOwnerExists();
+import {
+  AuthProvider,
+  discordUserToPublicUser,
+  useAuth,
+} from "./contexts/AuthContext";
 import { AdminPanelPage } from "./pages/AdminPanelPage";
+import { AppealsPage } from "./pages/AppealsPage";
+import { CallbackPage } from "./pages/CallbackPage";
 import { CommandVaultPage } from "./pages/CommandVaultPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { LeaveRequestsPage } from "./pages/LeaveRequestsPage";
 import { LoginPage } from "./pages/LoginPage";
+import { PunishmentLoggerPage } from "./pages/PunishmentLoggerPage";
 import { PunishmentMatrixPage } from "./pages/PunishmentMatrixPage";
 import { StaffConductPage } from "./pages/StaffConductPage";
 import { StaffLogsPage } from "./pages/StaffLogsPage";
 
-const SESSION_KEY = "staff_session";
-const CURRENT_OWNER_USERNAME = "Sirbrit_";
-
-function loadSessionFromStorage(): PublicUser | null {
-  try {
-    const raw = localStorage.getItem(SESSION_KEY);
-    if (!raw) return null;
-    const user = JSON.parse(raw) as PublicUser;
-    // Clear stale sessions from old owner usernames so they don't cause "invalid session" errors
-    if (
-      (user.role as string) === "Owner" &&
-      user.username !== CURRENT_OWNER_USERNAME
-    ) {
-      localStorage.removeItem(SESSION_KEY);
-      return null;
-    }
-    return user;
-  } catch {
-    return null;
-  }
-}
-
-export default function App() {
-  const { isFetching } = useActor();
-  const [currentUser, setCurrentUser] = useState<PublicUser | null>(() =>
-    loadSessionFromStorage(),
-  );
+function AppShell() {
+  const { discordUser, loading } = useAuth();
   const [activePage, setActivePage] = useState("dashboard");
 
-  const handleLogin = (user: PublicUser) => {
-    localStorage.setItem(
-      SESSION_KEY,
-      JSON.stringify(user, (_, v) =>
-        typeof v === "bigint" ? v.toString() : v,
-      ),
-    );
-    setCurrentUser(user);
-    setActivePage("dashboard");
-  };
-
-  const handleLogout = async () => {
-    localStorage.removeItem(SESSION_KEY);
-    setCurrentUser(null);
-  };
-
-  // Show loading spinner while the actor/canister connection is being established
-  if (isFetching) {
+  if (loading) {
     return (
       <div
         className="min-h-screen flex items-center justify-center"
@@ -96,21 +57,23 @@ export default function App() {
               letterSpacing: "0.1em",
             }}
           >
-            CONNECTING...
+            LOADING...
           </p>
         </div>
       </div>
     );
   }
 
-  if (!currentUser) {
+  if (!discordUser) {
     return (
       <>
-        <LoginPage onLogin={handleLogin} />
+        <LoginPage />
         <Toaster />
       </>
     );
   }
+
+  const currentUser: PublicUser = discordUserToPublicUser(discordUser);
 
   const renderPage = () => {
     switch (activePage) {
@@ -121,6 +84,8 @@ export default function App() {
             setActivePage={setActivePage}
           />
         );
+      case "punishment-logger":
+        return <PunishmentLoggerPage currentUser={currentUser} />;
       case "punishment-matrix":
         return <PunishmentMatrixPage currentUser={currentUser} />;
       case "command-vault":
@@ -129,6 +94,8 @@ export default function App() {
         return <StaffLogsPage currentUser={currentUser} />;
       case "leave-requests":
         return <LeaveRequestsPage currentUser={currentUser} />;
+      case "appeals":
+        return <AppealsPage currentUser={currentUser} />;
       case "staff-conduct":
         return <StaffConductPage />;
       case "admin-panel":
@@ -149,11 +116,33 @@ export default function App() {
         activePage={activePage}
         setActivePage={setActivePage}
         currentUser={currentUser}
-        onLogout={handleLogout}
       >
         {renderPage()}
       </Layout>
       <Toaster />
     </>
+  );
+}
+
+export default function App() {
+  const path = window.location.pathname;
+  const isCallback =
+    path === "/callback" ||
+    path.endsWith("/callback") ||
+    path.includes("/callback?");
+
+  if (isCallback) {
+    return (
+      <AuthProvider>
+        <CallbackPage />
+        <Toaster />
+      </AuthProvider>
+    );
+  }
+
+  return (
+    <AuthProvider>
+      <AppShell />
+    </AuthProvider>
   );
 }

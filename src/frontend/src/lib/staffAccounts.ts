@@ -16,6 +16,7 @@ export interface StaffAccount {
   passwordHash: string;
   role: Role;
   createdAt: number; // Unix ms
+  strikes?: number; // 0–3
 }
 
 // ---- Persistence helpers ------------------------------------------------
@@ -55,6 +56,7 @@ export function ensureOwnerExists(): void {
       passwordHash: OWNER_PASSWORD_HASH,
       role: Role.Owner,
       createdAt: Date.now(),
+      strikes: 0,
     });
     saveAccounts(withoutOldOwner);
   }
@@ -86,6 +88,7 @@ export async function createAccount(
     passwordHash,
     role,
     createdAt: Date.now(),
+    strikes: 0,
   };
 
   accounts.push(newAccount);
@@ -100,6 +103,34 @@ export function removeAccount(id: number): boolean {
   // Prevent removing the owner
   if (accounts[idx].role === Role.Owner) return false;
   accounts.splice(idx, 1);
+  saveAccounts(accounts);
+  return true;
+}
+
+/**
+ * Increment strikes for a staff member (max 3).
+ * Returns false if account not found.
+ */
+export function addStrike(id: number): boolean {
+  const accounts = loadAccounts();
+  const idx = accounts.findIndex((a) => a.id === id);
+  if (idx === -1) return false;
+  const current = accounts[idx].strikes ?? 0;
+  accounts[idx].strikes = Math.min(3, current + 1);
+  saveAccounts(accounts);
+  return true;
+}
+
+/**
+ * Decrement strikes for a staff member (min 0).
+ * Returns false if account not found.
+ */
+export function removeStrike(id: number): boolean {
+  const accounts = loadAccounts();
+  const idx = accounts.findIndex((a) => a.id === id);
+  if (idx === -1) return false;
+  const current = accounts[idx].strikes ?? 0;
+  accounts[idx].strikes = Math.max(0, current - 1);
   saveAccounts(accounts);
   return true;
 }

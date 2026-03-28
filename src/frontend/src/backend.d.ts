@@ -127,11 +127,28 @@ export enum UserRole {
     user = "user",
     guest = "guest"
 }
+export interface DiscordSessionData {
+    token: string;
+    discordId: string;
+    username: string;
+    avatar: string;
+    role: string;
+    createdAt: bigint;
+}
+export type Result_8 = {
+    __kind__: "ok";
+    ok: DiscordSessionData;
+} | {
+    __kind__: "err";
+    err: string;
+};
 export interface backendInterface {
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
     changePassword(oldPassword: string, newPassword: string): Promise<Result_1>;
     createStaffAccount(userPrincipal: Principal, username: string, passwordHash: string, role: Role): Promise<Result_7>;
     deactivateLOA(loaId: bigint): Promise<Result_1>;
+    discordCallback(code: string, redirectUri: string): Promise<Result_8>;
+    discordLogout(token: string): Promise<void>;
     dummyTransform(input: TransformationInput): Promise<TransformationOutput>;
     getActiveLOACount(): Promise<bigint>;
     getAllLOARequests(): Promise<Result_6>;
@@ -140,6 +157,7 @@ export interface backendInterface {
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
     getCurrentUser(): Promise<Result_2>;
+    getDiscordSession(token: string): Promise<DiscordSessionData | null>;
     getPunishmentLogCount(): Promise<bigint>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
     getWebhookConfig(): Promise<Result_3>;

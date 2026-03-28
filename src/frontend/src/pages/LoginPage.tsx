@@ -1,45 +1,48 @@
-import { Eye, EyeOff, Shield, Sword } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Scroll, Shield } from "lucide-react";
 import { useState } from "react";
-import type { PublicUser } from "../backend.d";
-import { Role } from "../backend.d";
-import { verifyCredentials } from "../lib/staffAccounts";
+import { SiDiscord } from "react-icons/si";
 
-interface LoginPageProps {
-  onLogin: (user: PublicUser) => void;
-}
+const DISCORD_CLIENT_ID = "1487232430279622879";
 
-export function LoginPage({ onLogin }: LoginPageProps) {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState("");
+const STAFF_RULES = `STAFF RULES & EXPECTATIONS — Lucky Block Survival 4
+
+1. Professionalism & Conduct
+• Constant Professionalism: You represent the server at all times. No offensive language directed at players.
+• Lead by Example: Follow all game and Discord rules.
+• Zero Abuse Tolerance: Any abuse of permissions results in immediate demotion.
+
+2. Punishment & Privacy Protocols
+• Confidentiality: Do not disclose who issued a punishment.
+• Evidence Handling: Internal evidence is Staff-Only. Never share with players. Direct to Appeal Ticket system.
+• Obligation to Inform: Tell players their punishment duration exactly as recorded.
+• Logging Requirement: You must log every punishment. Failure results in disciplinary action.
+
+3. Operational Standards
+• LOA Policy: Update the LOA section if taking time off. Active LOAs prevent Ghost Staff flags.
+• Activity Requirements: Maintain at least 1–2 hours of active moderation per week.
+• Hierarchy Respect: Lower-ranking staff may not modify or override higher-ranking staff actions.
+• Fairness: Always check player history including alts before issuing punishment.
+
+4. Technical Commands
+• Staff/Builder: /staffme, /jail, /free, /checknick, /h kick, /h mute, /checkstats, /checkitem
+• Co-Owner: All above + /selfadmin, /clearinv, /h ban, /adminmenu
+• Owner: Full system access and key generation`;
+
+export function LoginPage() {
+  const [agreed, setAgreed] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
+  const handleDiscordLogin = () => {
+    if (!agreed || loading) return;
     setLoading(true);
-    try {
-      // Verify against localStorage staff accounts (includes Owner)
-      const account = await verifyCredentials(username, password);
-
-      if (account) {
-        const publicUser: PublicUser = {
-          id: BigInt(account.id),
-          username: account.username,
-          role: account.role,
-          createdAt: BigInt(account.createdAt) * BigInt(1_000_000),
-        };
-        onLogin(publicUser);
-        return;
-      }
-
-      setError("Invalid credentials. Access denied.");
-    } catch {
-      setError("Something went wrong. Please try again.");
-    } finally {
-      setLoading(false);
-    }
+    const redirectUri = encodeURIComponent(
+      `${window.location.origin}/callback`,
+    );
+    const url = `https://discord.com/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&response_type=code&redirect_uri=${redirectUri}&scope=identify+guilds.members.read`;
+    window.location.href = url;
   };
 
   return (
@@ -47,7 +50,6 @@ export function LoginPage({ onLogin }: LoginPageProps) {
       className="min-h-screen flex items-center justify-center relative overflow-hidden"
       style={{ background: "var(--bg-deep)" }}
     >
-      {/* Background atmospheric effects */}
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
@@ -55,7 +57,6 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             "radial-gradient(ellipse 60% 50% at 50% 50%, rgba(124, 58, 237, 0.08) 0%, transparent 70%)",
         }}
       />
-      {/* Grid pattern */}
       <div
         className="absolute inset-0 pointer-events-none opacity-5"
         style={{
@@ -65,230 +66,193 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         }}
       />
 
-      <div className="relative z-10 w-full max-w-md px-6">
-        {/* Logo / Icon */}
-        <div className="flex justify-center mb-8">
+      <div className="relative z-10 w-full max-w-lg px-6">
+        <div className="flex flex-col items-center mb-8 gap-4">
           <div
             className="flex items-center justify-center rounded-xl animate-neon-pulse"
             style={{
-              width: "80px",
-              height: "80px",
+              width: "88px",
+              height: "88px",
               background:
                 "linear-gradient(135deg, rgba(124, 58, 237, 0.2), rgba(147, 51, 234, 0.1))",
               border: "1px solid var(--border-glow)",
               boxShadow: "0 0 30px rgba(124, 58, 237, 0.3)",
+              overflow: "hidden",
             }}
           >
-            <Shield
-              size={36}
-              style={{ color: "var(--accent-purple-bright)" }}
+            <img
+              src="/assets/uploads/colosseum_inside-019d317c-6bae-74f9-a799-9394318dfaeb-1.png"
+              alt="Lucky Block Survival 4"
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).src =
+                  "/assets/generated/lucky-block-logo-transparent.dim_200x200.png";
+                (e.currentTarget as HTMLImageElement).style.objectFit =
+                  "contain";
+              }}
             />
           </div>
-        </div>
-
-        {/* Main card */}
-        <div
-          className="neon-card scanlines relative"
-          style={{ padding: "40px 36px" }}
-        >
-          {/* Title */}
-          <div className="text-center mb-8">
-            <div className="flex items-center justify-center gap-2 mb-3">
-              <Sword
-                size={14}
-                style={{ color: "var(--accent-purple-bright)" }}
-              />
-              <h1
-                className="font-pixel neon-glow-text"
-                style={{ fontSize: "11px", letterSpacing: "0.08em" }}
-              >
-                STAFF CREDENTIALS REQUIRED
-              </h1>
-              <Sword
-                size={14}
-                style={{
-                  color: "var(--accent-purple-bright)",
-                  transform: "scaleX(-1)",
-                }}
-              />
-            </div>
-            <p style={{ fontSize: "12px", color: "var(--text-muted)" }}>
-              Lucky Block Survival — Staff Portal
+          <div className="text-center">
+            <h1
+              className="font-pixel neon-glow-text"
+              style={{
+                fontSize: "13px",
+                letterSpacing: "0.06em",
+                marginBottom: "6px",
+              }}
+            >
+              LUCKY BLOCK SURVIVAL 4
+            </h1>
+            <p
+              style={{
+                fontSize: "13px",
+                color: "var(--text-secondary)",
+                marginBottom: "4px",
+              }}
+            >
+              Staff Portal
+            </p>
+            <p
+              style={{
+                fontSize: "11px",
+                color: "var(--text-muted)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "4px",
+              }}
+            >
+              <Shield size={11} />
+              Authorized Discord staff members only
             </p>
           </div>
-
-          {/* Divider */}
-          <div
-            className="mb-8"
-            style={{
-              height: "1px",
-              background:
-                "linear-gradient(90deg, transparent, var(--border-glow), transparent)",
-            }}
-          />
-
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-            <div>
-              <label
-                htmlFor="login-username"
-                className="block font-pixel mb-2"
-                style={{
-                  fontSize: "9px",
-                  color: "var(--text-muted)",
-                  letterSpacing: "0.1em",
-                }}
-              >
-                USERNAME
-              </label>
-              <input
-                id="login-username"
-                data-ocid="login.username_input"
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="Enter your username"
-                required
-                className="dark-input w-full rounded-md"
-                style={{
-                  padding: "10px 14px",
-                  fontSize: "13px",
-                  background: "var(--bg-deep)",
-                  border: "1px solid var(--border-subtle)",
-                  color: "var(--text-primary)",
-                  outline: "none",
-                  transition: "border-color 0.2s, box-shadow 0.2s",
-                }}
-                onFocus={(e) => {
-                  e.target.style.borderColor = "var(--border-glow)";
-                  e.target.style.boxShadow =
-                    "0 0 8px var(--accent-purple-glow)";
-                }}
-                onBlur={(e) => {
-                  e.target.style.borderColor = "var(--border-subtle)";
-                  e.target.style.boxShadow = "none";
-                }}
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="login-password"
-                className="block font-pixel mb-2"
-                style={{
-                  fontSize: "9px",
-                  color: "var(--text-muted)",
-                  letterSpacing: "0.1em",
-                }}
-              >
-                PASSWORD
-              </label>
-              <div className="relative">
-                <input
-                  id="login-password"
-                  data-ocid="login.password_input"
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter your password"
-                  required
-                  className="dark-input w-full rounded-md"
-                  style={{
-                    padding: "10px 40px 10px 14px",
-                    fontSize: "13px",
-                    background: "var(--bg-deep)",
-                    border: "1px solid var(--border-subtle)",
-                    color: "var(--text-primary)",
-                    outline: "none",
-                    transition: "border-color 0.2s, box-shadow 0.2s",
-                  }}
-                  onFocus={(e) => {
-                    e.target.style.borderColor = "var(--border-glow)";
-                    e.target.style.boxShadow =
-                      "0 0 8px var(--accent-purple-glow)";
-                  }}
-                  onBlur={(e) => {
-                    e.target.style.borderColor = "var(--border-subtle)";
-                    e.target.style.boxShadow = "none";
-                  }}
-                />
-                <button
-                  type="button"
-                  data-ocid="login.toggle_password_button"
-                  onClick={() => setShowPassword((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2"
-                  style={{
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    color: "var(--text-muted)",
-                    padding: "2px",
-                    display: "flex",
-                    alignItems: "center",
-                  }}
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                >
-                  {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
-                </button>
-              </div>
-            </div>
-
-            {/* Error state */}
-            {error && (
-              <div
-                data-ocid="login.error_state"
-                className="flex items-center gap-2 rounded-md py-3 px-4"
-                style={{
-                  background: "rgba(239, 68, 68, 0.1)",
-                  border: "1px solid rgba(239, 68, 68, 0.4)",
-                  color: "#ef4444",
-                  fontSize: "12px",
-                }}
-              >
-                <Shield size={14} />
-                {error}
-              </div>
-            )}
-
-            <button
-              data-ocid="login.submit_button"
-              type="submit"
-              disabled={loading}
-              className="btn-neon w-full rounded-md py-3 mt-2 flex items-center justify-center gap-2"
-              style={{ fontSize: "11px", opacity: loading ? 0.7 : 1 }}
-            >
-              {loading ? (
-                <>
-                  <div
-                    className="animate-spin rounded-full"
-                    style={{
-                      width: "14px",
-                      height: "14px",
-                      border: "2px solid rgba(255,255,255,0.3)",
-                      borderTopColor: "white",
-                    }}
-                  />
-                  AUTHENTICATING...
-                </>
-              ) : (
-                <>
-                  <Sword size={14} />
-                  AUTHENTICATE
-                </>
-              )}
-            </button>
-          </form>
-
-          {/* Footer note */}
-          <p
-            className="text-center mt-6"
-            style={{ fontSize: "10px", color: "var(--text-muted)" }}
-          >
-            Authorized staff only. Unauthorized access is prohibited.
-          </p>
         </div>
 
-        {/* Brand footer */}
+        <div className="neon-card scanlines" style={{ padding: "32px 28px" }}>
+          <div className="mb-5">
+            <div className="flex items-center gap-2 mb-3">
+              <Scroll
+                size={12}
+                style={{ color: "var(--accent-purple-bright)" }}
+              />
+              <span
+                className="font-pixel"
+                style={{
+                  fontSize: "9px",
+                  color: "var(--text-muted)",
+                  letterSpacing: "0.1em",
+                }}
+              >
+                STAFF RULES & EXPECTATIONS
+              </span>
+            </div>
+            <ScrollArea
+              className="rounded-md"
+              style={{
+                height: "200px",
+                background: "var(--bg-deep)",
+                border: "1px solid var(--border-subtle)",
+              }}
+            >
+              <div
+                className="p-4"
+                style={{
+                  fontSize: "11px",
+                  color: "var(--text-muted)",
+                  lineHeight: 1.7,
+                  whiteSpace: "pre-line",
+                }}
+              >
+                {STAFF_RULES}
+              </div>
+            </ScrollArea>
+          </div>
+
+          <div
+            className="flex items-start gap-3 rounded-md p-3 mb-6"
+            style={{
+              background: "rgba(124, 58, 237, 0.06)",
+              border: "1px solid rgba(124, 58, 237, 0.2)",
+            }}
+          >
+            <Checkbox
+              id="agree-rules"
+              data-ocid="login.agree_checkbox"
+              checked={agreed}
+              onCheckedChange={(v) => setAgreed(!!v)}
+              className="mt-0.5 flex-shrink-0"
+            />
+            <Label
+              htmlFor="agree-rules"
+              style={{
+                fontSize: "11px",
+                color: "var(--text-secondary)",
+                lineHeight: 1.5,
+                cursor: "pointer",
+              }}
+            >
+              I have read the Staff Rules and agree to maintain the integrity of
+              the server.
+            </Label>
+          </div>
+
+          <button
+            type="button"
+            data-ocid="login.discord_button"
+            onClick={handleDiscordLogin}
+            disabled={!agreed || loading}
+            className="w-full flex items-center justify-center gap-3 py-4 rounded-lg transition-all duration-200"
+            style={{
+              background:
+                agreed && !loading ? "#5865F2" : "rgba(88, 101, 242, 0.2)",
+              border: "1px solid rgba(88, 101, 242, 0.5)",
+              color: agreed && !loading ? "#ffffff" : "rgba(255,255,255,0.3)",
+              cursor: agreed && !loading ? "pointer" : "not-allowed",
+              fontSize: "13px",
+              fontFamily: '"JetBrains Mono", monospace',
+              fontWeight: 700,
+              letterSpacing: "0.04em",
+              boxShadow:
+                agreed && !loading
+                  ? "0 0 20px rgba(88, 101, 242, 0.4)"
+                  : "none",
+            }}
+            onMouseEnter={(e) => {
+              if (!agreed || loading) return;
+              e.currentTarget.style.boxShadow =
+                "0 0 32px rgba(88, 101, 242, 0.6)";
+              e.currentTarget.style.transform = "translateY(-1px)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.boxShadow =
+                agreed && !loading
+                  ? "0 0 20px rgba(88, 101, 242, 0.4)"
+                  : "none";
+              e.currentTarget.style.transform = "translateY(0)";
+            }}
+          >
+            {loading ? (
+              <>
+                <div
+                  className="animate-spin rounded-full flex-shrink-0"
+                  style={{
+                    width: "18px",
+                    height: "18px",
+                    border: "2px solid rgba(255,255,255,0.3)",
+                    borderTopColor: "white",
+                  }}
+                />
+                REDIRECTING...
+              </>
+            ) : (
+              <>
+                <SiDiscord size={20} />
+                LOGIN WITH DISCORD
+              </>
+            )}
+          </button>
+        </div>
+
         <p
           className="text-center mt-6"
           style={{ fontSize: "10px", color: "var(--text-muted)" }}
