@@ -1,10 +1,8 @@
-import { Actor, HttpAgent } from "@icp-sdk/core/agent";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { SiDiscord } from "react-icons/si";
-import { loadConfig } from "../config";
+import { createActorWithConfig } from "../config";
 import { type DiscordUser, saveDiscordSession } from "../contexts/AuthContext";
-import { idlFactory } from "../declarations/backend.did";
 
 export function CallbackPage() {
   const [error, setError] = useState<string | null>(null);
@@ -25,20 +23,8 @@ export function CallbackPage() {
 
     (async () => {
       try {
-        const config = await loadConfig();
-        const agent = new HttpAgent({ host: config.backend_host });
-        if (config.backend_host?.includes("localhost")) {
-          await agent.fetchRootKey().catch(console.error);
-        }
-        const rawActor = Actor.createActor(idlFactory, {
-          agent,
-          canisterId: config.backend_canister_id,
-        });
-
-        const result = await (rawActor as any).discordCallback(
-          code,
-          redirectUri,
-        );
+        const actor = await createActorWithConfig();
+        const result = await actor.discordCallback(code, redirectUri);
 
         if ("ok" in result) {
           const raw = result.ok as any;
