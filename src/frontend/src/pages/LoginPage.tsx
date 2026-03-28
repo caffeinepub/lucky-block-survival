@@ -76,7 +76,7 @@ export function LoginPage() {
             }}
           >
             <img
-              src="/assets/uploads/colosseum_inside-019d317c-6bae-74f9-a799-9394318dfaeb-1.png"
+              src="/assets/uploads/lbsleakpvp-picsart-aiimageenhancer-019d3518-77e8-775a-891a-286b41767600-4.png"
               alt="Lucky Block Survival 4"
               style={{ width: "100%", height: "100%", objectFit: "cover" }}
               onError={(e) => {
