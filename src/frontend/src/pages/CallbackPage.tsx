@@ -1,10 +1,26 @@
-import { Actor, HttpAgent } from "@icp-sdk/core/agent";
+import { Actor, HttpAgent } from "@dfinity/agent";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { SiDiscord } from "react-icons/si";
-import { loadConfig } from "../config";
 import { type DiscordUser, saveDiscordSession } from "../contexts/AuthContext";
 import { idlFactory } from "../declarations/backend.did";
+
+// v2025-refresh
+
+async function getCanisterId(): Promise<string> {
+  try {
+    const r = await fetch("/env.json");
+    const j = await r.json();
+    const id = j.backend_canister_id;
+    if (id && id !== "undefined") return id;
+  } catch (_) {
+    /* ignore */
+  }
+  const envMeta = import.meta as unknown as { env?: Record<string, string> };
+  const envId = envMeta.env?.CANISTER_ID_BACKEND;
+  if (envId) return envId;
+  throw new Error("Could not determine canister ID");
+}
 
 export function CallbackPage() {
   const [error, setError] = useState<string | null>(null);
@@ -25,29 +41,46 @@ export function CallbackPage() {
 
     (async () => {
       try {
-        // Use raw Candid actor to avoid Backend class wrapper issues
-        const config = await loadConfig();
-        const agent = new HttpAgent({ host: config.backend_host });
-        if (config.backend_host?.includes("localhost")) {
-          await agent.fetchRootKey().catch(() => {});
-        }
+        const canisterId = await getCanisterId();
+        console.log("[Auth] Using canister ID:", canisterId);
+
+        const agent = new HttpAgent({ host: "https://ic0.app" });
+
+        // Use @dfinity/agent directly — bypasses generated Backend wrapper
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const rawActor = Actor.createActor<any>(idlFactory, {
+        const rawActor = Actor.createActor(idlFactory as any, {
           agent,
-          canisterId: config.backend_canister_id,
-        });
+          canisterId,
+        }) as Record<string, (...args: unknown[]) => Promise<unknown>>;
 
-        const result = await rawActor.discordCallback(code, redirectUri);
+        console.log(
+          "[Auth] Has discordCallback:",
+          typeof rawActor.discordCallback,
+        );
 
-        if (result && "ok" in result) {
-          const raw = result.ok as {
-            token: string;
-            discordId: string;
-            username: string;
-            avatar: string;
-            role: string;
-            createdAt: bigint;
-          };
+        if (typeof rawActor.discordCallback !== "function") {
+          throw new Error(
+            `discordCallback not found. Available: ${Object.keys(Object.getPrototypeOf(rawActor)).join(", ")}`,
+          );
+        }
+
+        const result = (await rawActor.discordCallback(code, redirectUri)) as
+          | {
+              ok: {
+                token: string;
+                discordId: string;
+                username: string;
+                avatar: string;
+                role: string;
+                createdAt: bigint;
+              };
+            }
+          | { err: string };
+
+        console.log("[Auth] Result:", result);
+
+        if ("ok" in result) {
+          const raw = result.ok;
           const data: DiscordUser = {
             token: raw.token,
             discordId: raw.discordId,
@@ -58,15 +91,16 @@ export function CallbackPage() {
           };
           saveDiscordSession(data);
           window.location.href = "/";
+        } else if ("err" in result) {
+          setError(
+            result.err ||
+              "Access denied. You do not have a valid staff role on this server.",
+          );
         } else {
-          const errMsg =
-            result && "err" in result && result.err
-              ? String(result.err)
-              : "Access denied. You do not have a valid staff role on this server.";
-          setError(errMsg);
+          setError("Unexpected response from authentication server.");
         }
       } catch (e) {
-        console.error("Discord callback error:", e);
+        console.error("[Auth] Discord callback error:", e);
         const msg = e instanceof Error ? e.message : String(e);
         setError(`Authentication error: ${msg}`);
       }
@@ -100,13 +134,12 @@ export function CallbackPage() {
           }}
         >
           <img
-            src="/assets/uploads/colosseum_inside-019d317c-6bae-74f9-a799-9394318dfaeb-1.png"
+            src="/assets/uploads/lbsleakpvp-picsart-aiimageenhancer-019d3518-77e8-775a-891a-286b41767600-4.png"
             alt="LBS4"
             style={{ width: "100%", height: "100%", objectFit: "cover" }}
             onError={(e) => {
               (e.currentTarget as HTMLImageElement).src =
-                "/assets/generated/lucky-block-logo-transparent.dim_200x200.png";
-              (e.currentTarget as HTMLImageElement).style.objectFit = "contain";
+                "/assets/uploads/colosseum_inside-019d317c-6bae-74f9-a799-9394318dfaeb-1.png";
             }}
           />
         </div>
@@ -210,8 +243,7 @@ export function CallbackPage() {
                     lineHeight: 1.6,
                   }}
                 >
-                  Common causes: Role not assigned in Discord server, or
-                  redirect URI mismatch in Discord Developer Portal.
+                  Open the browser console (F12) to see the full error detail.
                 </p>
               </div>
               <a
@@ -228,15 +260,6 @@ export function CallbackPage() {
                   letterSpacing: "0.06em",
                   textDecoration: "none",
                   cursor: "pointer",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "rgba(88, 101, 242, 0.2)";
-                  e.currentTarget.style.boxShadow =
-                    "0 0 16px rgba(88, 101, 242, 0.3)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "rgba(88, 101, 242, 0.12)";
-                  e.currentTarget.style.boxShadow = "none";
                 }}
               >
                 <SiDiscord size={14} />
