@@ -9,924 +9,444 @@
 import { Actor, HttpAgent, type HttpAgentOptions, type ActorConfig, type Agent, type ActorSubclass } from "@icp-sdk/core/agent";
 import type { Principal } from "@icp-sdk/core/principal";
 import { idlFactory, type _SERVICE } from "./declarations/backend.did";
-export interface Some<T> {
-    __kind__: "Some";
-    value: T;
-}
-export interface None {
-    __kind__: "None";
-}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+export interface Some<T> { __kind__: "Some"; value: T; }
+export interface None { __kind__: "None"; }
 export type Option<T> = Some<T> | None;
-function some<T>(value: T): Some<T> {
-    return {
-        __kind__: "Some",
-        value: value
-    };
-}
-function none(): None {
-    return {
-        __kind__: "None"
-    };
-}
-function isNone<T>(option: Option<T>): option is None {
-    return option.__kind__ === "None";
-}
-function isSome<T>(option: Option<T>): option is Some<T> {
-    return option.__kind__ === "Some";
-}
+function some<T>(value: T): Some<T> { return { __kind__: "Some", value }; }
+function none(): None { return { __kind__: "None" }; }
+function isNone<T>(option: Option<T>): option is None { return option.__kind__ === "None"; }
+function isSome<T>(option: Option<T>): option is Some<T> { return option.__kind__ === "Some"; }
 function unwrap<T>(option: Option<T>): T {
-    if (isNone(option)) {
-        throw new Error("unwrap: none");
-    }
-    return option.value;
+  if (isNone(option)) throw new Error("unwrap: none");
+  return option.value;
 }
-function candid_some<T>(value: T): [T] {
-    return [
-        value
-    ];
-}
-function candid_none<T>(): [] {
-    return [];
-}
+function candid_some<T>(value: T): [T] { return [value]; }
+function candid_none<T>(): [] { return []; }
 function record_opt_to_undefined<T>(arg: T | null): T | undefined {
-    return arg == null ? undefined : arg;
+  return arg == null ? undefined : arg;
 }
+
 export class ExternalBlob {
-    _blob?: Uint8Array<ArrayBuffer> | null;
-    directURL: string;
-    onProgress?: (percentage: number) => void = undefined;
-    private constructor(directURL: string, blob: Uint8Array<ArrayBuffer> | null){
-        if (blob) {
-            this._blob = blob;
-        }
-        this.directURL = directURL;
-    }
-    static fromURL(url: string): ExternalBlob {
-        return new ExternalBlob(url, null);
-    }
-    static fromBytes(blob: Uint8Array<ArrayBuffer>): ExternalBlob {
-        const url = URL.createObjectURL(new Blob([
-            new Uint8Array(blob)
-        ], {
-            type: 'application/octet-stream'
-        }));
-        return new ExternalBlob(url, blob);
-    }
-    public async getBytes(): Promise<Uint8Array<ArrayBuffer>> {
-        if (this._blob) {
-            return this._blob;
-        }
-        const response = await fetch(this.directURL);
-        const blob = await response.blob();
-        this._blob = new Uint8Array(await blob.arrayBuffer());
-        return this._blob;
-    }
-    public getDirectURL(): string {
-        return this.directURL;
-    }
-    public withUploadProgress(onProgress: (percentage: number) => void): ExternalBlob {
-        this.onProgress = onProgress;
-        return this;
-    }
+  _blob?: Uint8Array<ArrayBuffer> | null;
+  directURL: string;
+  onProgress?: (percentage: number) => void = undefined;
+  private constructor(directURL: string, blob: Uint8Array<ArrayBuffer> | null) {
+    if (blob) { this._blob = blob; }
+    this.directURL = directURL;
+  }
+  static fromURL(url: string): ExternalBlob { return new ExternalBlob(url, null); }
+  static fromBytes(blob: Uint8Array<ArrayBuffer>): ExternalBlob {
+    const url = URL.createObjectURL(new Blob([new Uint8Array(blob)], { type: 'application/octet-stream' }));
+    return new ExternalBlob(url, blob);
+  }
+  public async getBytes(): Promise<Uint8Array<ArrayBuffer>> {
+    if (this._blob) return this._blob;
+    const response = await fetch(this.directURL);
+    const blob = await response.blob();
+    this._blob = new Uint8Array(await blob.arrayBuffer());
+    return this._blob;
+  }
+  public getDirectURL(): string { return this.directURL; }
+  public withUploadProgress(onProgress: (percentage: number) => void): ExternalBlob {
+    this.onProgress = onProgress;
+    return this;
+  }
 }
-export type Result_2 = {
-    __kind__: "ok";
-    ok: PublicUser;
-} | {
-    __kind__: "err";
-    err: string;
-};
-export interface TransformationOutput {
-    status: bigint;
-    body: Uint8Array;
-    headers: Array<http_header>;
-}
-export type Result_6 = {
-    __kind__: "ok";
-    ok: Array<LOARequest>;
-} | {
-    __kind__: "err";
-    err: string;
-};
-export type Result_5 = {
-    __kind__: "ok";
-    ok: Array<PunishmentLog>;
-} | {
-    __kind__: "err";
-    err: string;
-};
-export interface PublicUser {
-    id: UserId;
-    username: string;
-    createdAt: bigint;
-    role: Role;
-}
-export type Result_1 = {
-    __kind__: "ok";
-    ok: null;
-} | {
-    __kind__: "err";
-    err: string;
-};
-export interface http_header {
-    value: string;
-    name: string;
-}
-export type Result_4 = {
-    __kind__: "ok";
-    ok: Array<PublicUser>;
-} | {
-    __kind__: "err";
-    err: string;
-};
-export type UserId = bigint;
-export interface http_request_result {
-    status: bigint;
-    body: Uint8Array;
-    headers: Array<http_header>;
-}
-export type Result = {
-    __kind__: "ok";
-    ok: bigint;
-} | {
-    __kind__: "err";
-    err: string;
-};
-export type Result_3 = {
-    __kind__: "ok";
-    ok: WebhookConfig;
-} | {
-    __kind__: "err";
-    err: string;
-};
-export interface PunishmentLog {
-    id: bigint;
-    ign: string;
-    rnd: string;
-    offenseNumber: bigint;
-    submittedBy: string;
-    timestamp: bigint;
-    proof: string;
-}
-export interface WebhookConfig {
-    loaWebhookUrl: string;
-    punishmentWebhookUrl: string;
-}
-export interface TransformationInput {
-    context: Uint8Array;
-    response: http_request_result;
-}
-export type Result_7 = {
-    __kind__: "ok";
-    ok: UserId;
-} | {
-    __kind__: "err";
-    err: string;
-};
-export interface LOARequest {
-    id: bigint;
-    ign: string;
-    active: boolean;
-    submittedBy: string;
-    timestamp: bigint;
-    discordUsername: string;
-    leaveDate: string;
-    returnDate: string;
-}
-export interface UserProfile {
-    ign: string;
-    username: string;
-    role: Role;
-    discordUsername: string;
-}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
 export enum Role {
-    CoOwner = "CoOwner",
-    StaffBuilder = "StaffBuilder",
-    Owner = "Owner"
+  Owner   = "Owner",
+  CoOwner = "CoOwner",
+  Staff   = "Staff",
+  Builder = "Builder",
 }
+
+export enum UserStatus {
+  Active    = "Active",
+  Suspended = "Suspended",
+}
+
 export enum UserRole {
-    admin = "admin",
-    user = "user",
-    guest = "guest"
+  admin = "admin",
+  user  = "user",
+  guest = "guest",
 }
+
+// ─── TypeScript interfaces for Candid types ──────────────────────────────────
+
+export interface PublicUser {
+  id: bigint;
+  username: string;
+  role: Role;
+  status: UserStatus;
+  createdAt: bigint;
+}
+
+export interface SessionData {
+  token: string;
+  userId: bigint;
+  username: string;
+  role: Role;
+  createdAt: bigint;
+  expiresAt: bigint;
+}
+
+export interface AuditLogEntry {
+  id: bigint;
+  actorId: bigint;
+  action: string;
+  performedBy: string;
+  targetUser: string | null;
+  details: string;
+  timestamp: bigint;
+}
+
+export interface FailedLoginAttempt {
+  username: string;
+  timestamp: bigint;
+}
+
+export interface WebhookSettings {
+  punishmentWebhookUrl: string;
+}
+
+export interface LOARequest {
+  id: bigint;
+  ign: string;
+  discordUsername: string;
+  leaveDate: string;
+  returnDate: string;
+  submittedBy: string;
+  timestamp: bigint;
+  active: boolean;
+}
+
+export interface PunishmentRecord {
+  id: bigint;
+  playerIGN: string;
+  altAccounts: Array<string>;
+  category: string;
+  offenseNumber: bigint;
+  duration: string;
+  reason: string;
+  proofUrl: string;
+  issuedBy: string;
+  timestamp: bigint;
+  appealed: boolean;
+  appealId: bigint | null;
+}
+
+// ─── Result types ─────────────────────────────────────────────────────────────
+
+export type Result_1  = { __kind__: "ok"; ok: null }                      | { __kind__: "err"; err: string };
+export type Result_2  = { __kind__: "ok"; ok: PublicUser }                | { __kind__: "err"; err: string };
+export type Result_3  = { __kind__: "ok"; ok: SessionData }               | { __kind__: "err"; err: string };
+export type Result_4  = { __kind__: "ok"; ok: bigint }                    | { __kind__: "err"; err: string };
+export type Result_5  = { __kind__: "ok"; ok: Array<PublicUser> }         | { __kind__: "err"; err: string };
+export type Result_6  = { __kind__: "ok"; ok: Array<AuditLogEntry> }      | { __kind__: "err"; err: string };
+export type Result_7  = { __kind__: "ok"; ok: Array<FailedLoginAttempt> } | { __kind__: "err"; err: string };
+export type Result_8  = { __kind__: "ok"; ok: WebhookSettings }           | { __kind__: "err"; err: string };
+export type Result_9  = { __kind__: "ok"; ok: Array<LOARequest> }         | { __kind__: "err"; err: string };
+export type Result_10 = { __kind__: "ok"; ok: Array<PunishmentRecord> }   | { __kind__: "err"; err: string };
+
+// ─── Candid variant conversion helpers ───────────────────────────────────────
+
+function fromCandidResult_1(value: { ok: null } | { err: string }): Result_1 {
+  return "ok" in value ? { __kind__: "ok", ok: value.ok } : { __kind__: "err", err: value.err };
+}
+function fromCandidResult_4(value: { ok: bigint } | { err: string }): Result_4 {
+  return "ok" in value ? { __kind__: "ok", ok: value.ok } : { __kind__: "err", err: value.err };
+}
+function fromCandidRole(value: { Owner: null } | { CoOwner: null } | { Staff: null } | { Builder: null }): Role {
+  if ("Owner"   in value) return Role.Owner;
+  if ("CoOwner" in value) return Role.CoOwner;
+  if ("Staff"   in value) return Role.Staff;
+  return Role.Builder;
+}
+function toCandidRole(value: Role): { Owner: null } | { CoOwner: null } | { Staff: null } | { Builder: null } {
+  if (value === Role.Owner)   return { Owner:   null };
+  if (value === Role.CoOwner) return { CoOwner: null };
+  if (value === Role.Staff)   return { Staff:   null };
+  return { Builder: null };
+}
+function fromCandidUserStatus(value: { Active: null } | { Suspended: null }): UserStatus {
+  return "Active" in value ? UserStatus.Active : UserStatus.Suspended;
+}
+function fromCandidUserRole(value: { admin: null } | { user: null } | { guest: null }): UserRole {
+  if ("admin" in value) return UserRole.admin;
+  if ("user"  in value) return UserRole.user;
+  return UserRole.guest;
+}
+function toCandidUserRole(value: UserRole): { admin: null } | { user: null } | { guest: null } {
+  if (value === UserRole.admin) return { admin: null };
+  if (value === UserRole.user)  return { user:  null };
+  return { guest: null };
+}
+function fromCandidPublicUser(value: any): PublicUser {
+  return {
+    id: value.id,
+    username: value.username,
+    role: fromCandidRole(value.role),
+    status: fromCandidUserStatus(value.status),
+    createdAt: value.createdAt,
+  };
+}
+function fromCandidSessionData(value: any): SessionData {
+  return {
+    token: value.token,
+    userId: value.userId,
+    username: value.username,
+    role: fromCandidRole(value.role),
+    createdAt: value.createdAt,
+    expiresAt: value.expiresAt,
+  };
+}
+function fromCandidAuditLogEntry(value: any): AuditLogEntry {
+  return {
+    id: value.id,
+    actorId: value.actorId,
+    action: value.action,
+    performedBy: value.performedBy,
+    targetUser: value.targetUser.length > 0 ? value.targetUser[0] : null,
+    details: value.details,
+    timestamp: value.timestamp,
+  };
+}
+function fromCandidPunishmentRecord(value: any): PunishmentRecord {
+  return {
+    id: value.id,
+    playerIGN: value.playerIGN,
+    altAccounts: value.altAccounts,
+    category: value.category,
+    offenseNumber: value.offenseNumber,
+    duration: value.duration,
+    reason: value.reason,
+    proofUrl: value.proofUrl,
+    issuedBy: value.issuedBy,
+    timestamp: value.timestamp,
+    appealed: value.appealed,
+    appealId: value.appealId.length > 0 ? value.appealId[0] : null,
+  };
+}
+function fromCandidResult_2(value: any): Result_2 {
+  return "ok" in value
+    ? { __kind__: "ok", ok: fromCandidPublicUser(value.ok) }
+    : { __kind__: "err", err: value.err };
+}
+function fromCandidResult_3(value: any): Result_3 {
+  return "ok" in value
+    ? { __kind__: "ok", ok: fromCandidSessionData(value.ok) }
+    : { __kind__: "err", err: value.err };
+}
+function fromCandidResult_5(value: any): Result_5 {
+  return "ok" in value
+    ? { __kind__: "ok", ok: value.ok.map(fromCandidPublicUser) }
+    : { __kind__: "err", err: value.err };
+}
+function fromCandidResult_6(value: any): Result_6 {
+  return "ok" in value
+    ? { __kind__: "ok", ok: value.ok.map(fromCandidAuditLogEntry) }
+    : { __kind__: "err", err: value.err };
+}
+function fromCandidResult_7(value: any): Result_7 {
+  return "ok" in value
+    ? { __kind__: "ok", ok: value.ok }
+    : { __kind__: "err", err: value.err };
+}
+function fromCandidResult_8(value: any): Result_8 {
+  return "ok" in value
+    ? { __kind__: "ok", ok: value.ok }
+    : { __kind__: "err", err: value.err };
+}
+function fromCandidResult_9(value: any): Result_9 {
+  return "ok" in value
+    ? { __kind__: "ok", ok: value.ok }
+    : { __kind__: "err", err: value.err };
+}
+function fromCandidResult_10(value: any): Result_10 {
+  return "ok" in value
+    ? { __kind__: "ok", ok: value.ok.map(fromCandidPunishmentRecord) }
+    : { __kind__: "err", err: value.err };
+}
+
+// ─── Backend interface ────────────────────────────────────────────────────────
+
 export interface backendInterface {
-    _initializeAccessControlWithSecret(userSecret: string): Promise<void>;
-    assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
-    changePassword(oldPassword: string, newPassword: string): Promise<Result_1>;
-    createStaffAccount(userPrincipal: Principal, username: string, passwordHash: string, role: Role): Promise<Result_7>;
-    deactivateLOA(loaId: bigint): Promise<Result_1>;
-    dummyTransform(input: TransformationInput): Promise<TransformationOutput>;
-    getActiveLOACount(): Promise<bigint>;
-    getAllLOARequests(): Promise<Result_6>;
-    getAllPunishmentLogs(): Promise<Result_5>;
-    getAllUsers(): Promise<Result_4>;
-    getCallerUserProfile(): Promise<UserProfile | null>;
-    getCallerUserRole(): Promise<UserRole>;
-    getCurrentUser(): Promise<Result_2>;
-    getPunishmentLogCount(): Promise<bigint>;
-    getUserProfile(user: Principal): Promise<UserProfile | null>;
-    getWebhookConfig(): Promise<Result_3>;
-    initializeBackend(didSeed: string): Promise<void>;
-    isCallerAdmin(): Promise<boolean>;
-    login(username: string, password: string): Promise<Result_2>;
-    logout(): Promise<Result_1>;
-    promoteUser(userPrincipal: Principal, newRole: Role): Promise<Result_1>;
-    removeStaffAccount(userPrincipal: Principal): Promise<Result_1>;
-    saveCallerUserProfile(profile: UserProfile): Promise<void>;
-    setWebhookConfig(punishmentUrl: string, loaUrl: string): Promise<Result_1>;
-    submitLOARequest(ign: string, discordUsername: string, leaveDate: string, returnDate: string): Promise<Result>;
-    submitPunishmentLog(ign: string, rnd: string, offenseNumber: bigint, proof: string): Promise<Result>;
+  // MixinAuthorization
+  _initializeAccessControlWithSecret(secret: string): Promise<void>;
+  assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
+  getCallerUserRole(): Promise<UserRole>;
+  isCallerAdmin(): Promise<boolean>;
+
+  // Custom auth
+  loginWithCredentials(username: string, passwordHash: string): Promise<Result_3>;
+  validateSession(token: string): Promise<Result_2>;
+  logoutSession(token: string): Promise<void>;
+
+  // User management
+  createUser(token: string, username: string, passwordHash: string, role: Role): Promise<Result_4>;
+  removeUser(token: string, targetUsername: string): Promise<Result_1>;
+  suspendUser(token: string, targetUsername: string): Promise<Result_1>;
+  activateUser(token: string, targetUsername: string): Promise<Result_1>;
+  updateUserRole(token: string, targetUsername: string, newRole: Role): Promise<Result_1>;
+  changePassword(token: string, oldPasswordHash: string, newPasswordHash: string): Promise<Result_1>;
+  getAllUsers(token: string): Promise<Result_5>;
+
+  // Audit log
+  getAuditLog(token: string): Promise<Result_6>;
+  getFailedLoginAttempts(token: string): Promise<Result_7>;
+
+  // Webhook
+  getWebhookConfig(token: string): Promise<Result_8>;
+  setWebhookConfig(token: string, punishmentUrl: string): Promise<Result_1>;
+
+  // LOA
+  submitLOARequest(token: string, ign: string, discordUsername: string, leaveDate: string, returnDate: string): Promise<Result_4>;
+  getAllLOARequests(token: string): Promise<Result_9>;
+  deactivateLOA(token: string, loaId: bigint): Promise<Result_1>;
+
+  // Punishments
+  submitPunishmentLog(token: string, playerIGN: string, category: string, offenseNumber: bigint, duration: string, reason: string, proofUrl: string, altAccounts: string[]): Promise<Result_4>;
+  getAllPunishmentLogs(token: string): Promise<Result_10>;
+  getPunishmentLogCount(): Promise<bigint>;
 }
-import type { LOARequest as _LOARequest, PublicUser as _PublicUser, PunishmentLog as _PunishmentLog, Result as _Result, Result_1 as _Result_1, Result_2 as _Result_2, Result_3 as _Result_3, Result_4 as _Result_4, Result_5 as _Result_5, Result_6 as _Result_6, Result_7 as _Result_7, Role as _Role, UserId as _UserId, UserProfile as _UserProfile, UserRole as _UserRole, WebhookConfig as _WebhookConfig } from "./declarations/backend.did.d.ts";
+
+// ─── Backend class ───────────────────────────────────────────────────────────
+
 export class Backend implements backendInterface {
-    constructor(private actor: ActorSubclass<_SERVICE>, private _uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, private _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, private processError?: (error: unknown) => never){}
-    async _initializeAccessControlWithSecret(arg0: string): Promise<void> {
-        if (this.processError) {
-            try {
-                const result = await this.actor._initializeAccessControlWithSecret(arg0);
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor._initializeAccessControlWithSecret(arg0);
-            return result;
-        }
+  constructor(
+    private actor: ActorSubclass<_SERVICE>,
+    private _uploadFile: (file: ExternalBlob) => Promise<Uint8Array>,
+    private _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>,
+    private processError?: (error: unknown) => never,
+  ) {}
+
+  private async call<T>(fn: () => Promise<T>): Promise<T> {
+    if (this.processError) {
+      try {
+        return await fn();
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
     }
-    async assignCallerUserRole(arg0: Principal, arg1: UserRole): Promise<void> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.assignCallerUserRole(arg0, to_candid_UserRole_n1(this._uploadFile, this._downloadFile, arg1));
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.assignCallerUserRole(arg0, to_candid_UserRole_n1(this._uploadFile, this._downloadFile, arg1));
-            return result;
-        }
-    }
-    async changePassword(arg0: string, arg1: string): Promise<Result_1> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.changePassword(arg0, arg1);
-                return from_candid_Result_1_n3(this._uploadFile, this._downloadFile, result);
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.changePassword(arg0, arg1);
-            return from_candid_Result_1_n3(this._uploadFile, this._downloadFile, result);
-        }
-    }
-    async createStaffAccount(arg0: Principal, arg1: string, arg2: string, arg3: Role): Promise<Result_7> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.createStaffAccount(arg0, arg1, arg2, to_candid_Role_n5(this._uploadFile, this._downloadFile, arg3));
-                return from_candid_Result_7_n7(this._uploadFile, this._downloadFile, result);
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.createStaffAccount(arg0, arg1, arg2, to_candid_Role_n5(this._uploadFile, this._downloadFile, arg3));
-            return from_candid_Result_7_n7(this._uploadFile, this._downloadFile, result);
-        }
-    }
-    async deactivateLOA(arg0: bigint): Promise<Result_1> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.deactivateLOA(arg0);
-                return from_candid_Result_1_n3(this._uploadFile, this._downloadFile, result);
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.deactivateLOA(arg0);
-            return from_candid_Result_1_n3(this._uploadFile, this._downloadFile, result);
-        }
-    }
-    async dummyTransform(arg0: TransformationInput): Promise<TransformationOutput> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.dummyTransform(arg0);
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.dummyTransform(arg0);
-            return result;
-        }
-    }
-    async getActiveLOACount(): Promise<bigint> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.getActiveLOACount();
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.getActiveLOACount();
-            return result;
-        }
-    }
-    async getAllLOARequests(): Promise<Result_6> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.getAllLOARequests();
-                return from_candid_Result_6_n9(this._uploadFile, this._downloadFile, result);
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.getAllLOARequests();
-            return from_candid_Result_6_n9(this._uploadFile, this._downloadFile, result);
-        }
-    }
-    async getAllPunishmentLogs(): Promise<Result_5> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.getAllPunishmentLogs();
-                return from_candid_Result_5_n11(this._uploadFile, this._downloadFile, result);
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.getAllPunishmentLogs();
-            return from_candid_Result_5_n11(this._uploadFile, this._downloadFile, result);
-        }
-    }
-    async getAllUsers(): Promise<Result_4> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.getAllUsers();
-                return from_candid_Result_4_n13(this._uploadFile, this._downloadFile, result);
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.getAllUsers();
-            return from_candid_Result_4_n13(this._uploadFile, this._downloadFile, result);
-        }
-    }
-    async getCallerUserProfile(): Promise<UserProfile | null> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.getCallerUserProfile();
-                return from_candid_opt_n20(this._uploadFile, this._downloadFile, result);
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.getCallerUserProfile();
-            return from_candid_opt_n20(this._uploadFile, this._downloadFile, result);
-        }
-    }
-    async getCallerUserRole(): Promise<UserRole> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.getCallerUserRole();
-                return from_candid_UserRole_n23(this._uploadFile, this._downloadFile, result);
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.getCallerUserRole();
-            return from_candid_UserRole_n23(this._uploadFile, this._downloadFile, result);
-        }
-    }
-    async getCurrentUser(): Promise<Result_2> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.getCurrentUser();
-                return from_candid_Result_2_n25(this._uploadFile, this._downloadFile, result);
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.getCurrentUser();
-            return from_candid_Result_2_n25(this._uploadFile, this._downloadFile, result);
-        }
-    }
-    async getPunishmentLogCount(): Promise<bigint> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.getPunishmentLogCount();
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.getPunishmentLogCount();
-            return result;
-        }
-    }
-    async getUserProfile(arg0: Principal): Promise<UserProfile | null> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.getUserProfile(arg0);
-                return from_candid_opt_n20(this._uploadFile, this._downloadFile, result);
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.getUserProfile(arg0);
-            return from_candid_opt_n20(this._uploadFile, this._downloadFile, result);
-        }
-    }
-    async getWebhookConfig(): Promise<Result_3> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.getWebhookConfig();
-                return from_candid_Result_3_n27(this._uploadFile, this._downloadFile, result);
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.getWebhookConfig();
-            return from_candid_Result_3_n27(this._uploadFile, this._downloadFile, result);
-        }
-    }
-    async initializeBackend(arg0: string): Promise<void> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.initializeBackend(arg0);
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.initializeBackend(arg0);
-            return result;
-        }
-    }
-    async isCallerAdmin(): Promise<boolean> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.isCallerAdmin();
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.isCallerAdmin();
-            return result;
-        }
-    }
-    async login(arg0: string, arg1: string): Promise<Result_2> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.login(arg0, arg1);
-                return from_candid_Result_2_n25(this._uploadFile, this._downloadFile, result);
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.login(arg0, arg1);
-            return from_candid_Result_2_n25(this._uploadFile, this._downloadFile, result);
-        }
-    }
-    async logout(): Promise<Result_1> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.logout();
-                return from_candid_Result_1_n3(this._uploadFile, this._downloadFile, result);
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.logout();
-            return from_candid_Result_1_n3(this._uploadFile, this._downloadFile, result);
-        }
-    }
-    async promoteUser(arg0: Principal, arg1: Role): Promise<Result_1> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.promoteUser(arg0, to_candid_Role_n5(this._uploadFile, this._downloadFile, arg1));
-                return from_candid_Result_1_n3(this._uploadFile, this._downloadFile, result);
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.promoteUser(arg0, to_candid_Role_n5(this._uploadFile, this._downloadFile, arg1));
-            return from_candid_Result_1_n3(this._uploadFile, this._downloadFile, result);
-        }
-    }
-    async removeStaffAccount(arg0: Principal): Promise<Result_1> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.removeStaffAccount(arg0);
-                return from_candid_Result_1_n3(this._uploadFile, this._downloadFile, result);
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.removeStaffAccount(arg0);
-            return from_candid_Result_1_n3(this._uploadFile, this._downloadFile, result);
-        }
-    }
-    async saveCallerUserProfile(arg0: UserProfile): Promise<void> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.saveCallerUserProfile(to_candid_UserProfile_n29(this._uploadFile, this._downloadFile, arg0));
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.saveCallerUserProfile(to_candid_UserProfile_n29(this._uploadFile, this._downloadFile, arg0));
-            return result;
-        }
-    }
-    async setWebhookConfig(arg0: string, arg1: string): Promise<Result_1> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.setWebhookConfig(arg0, arg1);
-                return from_candid_Result_1_n3(this._uploadFile, this._downloadFile, result);
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.setWebhookConfig(arg0, arg1);
-            return from_candid_Result_1_n3(this._uploadFile, this._downloadFile, result);
-        }
-    }
-    async submitLOARequest(arg0: string, arg1: string, arg2: string, arg3: string): Promise<Result> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.submitLOARequest(arg0, arg1, arg2, arg3);
-                return from_candid_Result_n31(this._uploadFile, this._downloadFile, result);
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.submitLOARequest(arg0, arg1, arg2, arg3);
-            return from_candid_Result_n31(this._uploadFile, this._downloadFile, result);
-        }
-    }
-    async submitPunishmentLog(arg0: string, arg1: string, arg2: bigint, arg3: string): Promise<Result> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.submitPunishmentLog(arg0, arg1, arg2, arg3);
-                return from_candid_Result_n31(this._uploadFile, this._downloadFile, result);
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.submitPunishmentLog(arg0, arg1, arg2, arg3);
-            return from_candid_Result_n31(this._uploadFile, this._downloadFile, result);
-        }
-    }
+    return fn();
+  }
+
+  // ── MixinAuthorization ───────────────────────────────────────────────
+  async _initializeAccessControlWithSecret(arg0: string): Promise<void> {
+    return this.call(() => this.actor._initializeAccessControlWithSecret(arg0));
+  }
+  async assignCallerUserRole(arg0: Principal, arg1: UserRole): Promise<void> {
+    return this.call(() => this.actor.assignCallerUserRole(arg0, toCandidUserRole(arg1)));
+  }
+  async getCallerUserRole(): Promise<UserRole> {
+    return this.call(async () => fromCandidUserRole(await this.actor.getCallerUserRole()));
+  }
+  async isCallerAdmin(): Promise<boolean> {
+    return this.call(() => this.actor.isCallerAdmin());
+  }
+
+  // ── Custom auth ──────────────────────────────────────────────────────
+  async loginWithCredentials(username: string, passwordHash: string): Promise<Result_3> {
+    return this.call(async () => fromCandidResult_3(await this.actor.loginWithCredentials(username, passwordHash)));
+  }
+  async validateSession(token: string): Promise<Result_2> {
+    return this.call(async () => fromCandidResult_2(await this.actor.validateSession(token)));
+  }
+  async logoutSession(token: string): Promise<void> {
+    return this.call(() => this.actor.logoutSession(token));
+  }
+
+  // ── User management ─────────────────────────────────────────────────
+  async createUser(token: string, username: string, passwordHash: string, role: Role): Promise<Result_4> {
+    return this.call(async () => fromCandidResult_4(await this.actor.createUser(token, username, passwordHash, toCandidRole(role))));
+  }
+  async removeUser(token: string, targetUsername: string): Promise<Result_1> {
+    return this.call(async () => fromCandidResult_1(await this.actor.removeUser(token, targetUsername)));
+  }
+  async suspendUser(token: string, targetUsername: string): Promise<Result_1> {
+    return this.call(async () => fromCandidResult_1(await this.actor.suspendUser(token, targetUsername)));
+  }
+  async activateUser(token: string, targetUsername: string): Promise<Result_1> {
+    return this.call(async () => fromCandidResult_1(await this.actor.activateUser(token, targetUsername)));
+  }
+  async updateUserRole(token: string, targetUsername: string, newRole: Role): Promise<Result_1> {
+    return this.call(async () => fromCandidResult_1(await this.actor.updateUserRole(token, targetUsername, toCandidRole(newRole))));
+  }
+  async changePassword(token: string, oldPasswordHash: string, newPasswordHash: string): Promise<Result_1> {
+    return this.call(async () => fromCandidResult_1(await this.actor.changePassword(token, oldPasswordHash, newPasswordHash)));
+  }
+  async getAllUsers(token: string): Promise<Result_5> {
+    return this.call(async () => fromCandidResult_5(await this.actor.getAllUsers(token)));
+  }
+
+  // ── Audit log ───────────────────────────────────────────────────────────
+  async getAuditLog(token: string): Promise<Result_6> {
+    return this.call(async () => fromCandidResult_6(await this.actor.getAuditLog(token)));
+  }
+  async getFailedLoginAttempts(token: string): Promise<Result_7> {
+    return this.call(async () => fromCandidResult_7(await this.actor.getFailedLoginAttempts(token)));
+  }
+
+  // ── Webhook config ─────────────────────────────────────────────────────
+  async getWebhookConfig(token: string): Promise<Result_8> {
+    return this.call(async () => fromCandidResult_8(await this.actor.getWebhookConfig(token)));
+  }
+  async setWebhookConfig(token: string, punishmentUrl: string): Promise<Result_1> {
+    return this.call(async () => fromCandidResult_1(await this.actor.setWebhookConfig(token, punishmentUrl)));
+  }
+
+  // ── LOA ──────────────────────────────────────────────────────────────────
+  async submitLOARequest(token: string, ign: string, discordUsername: string, leaveDate: string, returnDate: string): Promise<Result_4> {
+    return this.call(async () => fromCandidResult_4(await this.actor.submitLOARequest(token, ign, discordUsername, leaveDate, returnDate)));
+  }
+  async getAllLOARequests(token: string): Promise<Result_9> {
+    return this.call(async () => fromCandidResult_9(await this.actor.getAllLOARequests(token)));
+  }
+  async deactivateLOA(token: string, loaId: bigint): Promise<Result_1> {
+    return this.call(async () => fromCandidResult_1(await this.actor.deactivateLOA(token, loaId)));
+  }
+
+  // ── Punishments ─────────────────────────────────────────────────────────
+  async submitPunishmentLog(token: string, playerIGN: string, category: string, offenseNumber: bigint, duration: string, reason: string, proofUrl: string, altAccounts: string[]): Promise<Result_4> {
+    return this.call(async () => fromCandidResult_4(await this.actor.submitPunishmentLog(token, playerIGN, category, offenseNumber, duration, reason, proofUrl, altAccounts)));
+  }
+  async getAllPunishmentLogs(token: string): Promise<Result_10> {
+    return this.call(async () => fromCandidResult_10(await this.actor.getAllPunishmentLogs(token)));
+  }
+  async getPunishmentLogCount(): Promise<bigint> {
+    return this.call(() => this.actor.getPunishmentLogCount());
+  }
 }
-function from_candid_PublicUser_n16(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _PublicUser): PublicUser {
-    return from_candid_record_n17(_uploadFile, _downloadFile, value);
-}
-function from_candid_Result_1_n3(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _Result_1): Result_1 {
-    return from_candid_variant_n4(_uploadFile, _downloadFile, value);
-}
-function from_candid_Result_2_n25(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _Result_2): Result_2 {
-    return from_candid_variant_n26(_uploadFile, _downloadFile, value);
-}
-function from_candid_Result_3_n27(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _Result_3): Result_3 {
-    return from_candid_variant_n28(_uploadFile, _downloadFile, value);
-}
-function from_candid_Result_4_n13(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _Result_4): Result_4 {
-    return from_candid_variant_n14(_uploadFile, _downloadFile, value);
-}
-function from_candid_Result_5_n11(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _Result_5): Result_5 {
-    return from_candid_variant_n12(_uploadFile, _downloadFile, value);
-}
-function from_candid_Result_6_n9(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _Result_6): Result_6 {
-    return from_candid_variant_n10(_uploadFile, _downloadFile, value);
-}
-function from_candid_Result_7_n7(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _Result_7): Result_7 {
-    return from_candid_variant_n8(_uploadFile, _downloadFile, value);
-}
-function from_candid_Result_n31(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _Result): Result {
-    return from_candid_variant_n32(_uploadFile, _downloadFile, value);
-}
-function from_candid_Role_n18(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _Role): Role {
-    return from_candid_variant_n19(_uploadFile, _downloadFile, value);
-}
-function from_candid_UserProfile_n21(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _UserProfile): UserProfile {
-    return from_candid_record_n22(_uploadFile, _downloadFile, value);
-}
-function from_candid_UserRole_n23(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _UserRole): UserRole {
-    return from_candid_variant_n24(_uploadFile, _downloadFile, value);
-}
-function from_candid_opt_n20(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: [] | [_UserProfile]): UserProfile | null {
-    return value.length === 0 ? null : from_candid_UserProfile_n21(_uploadFile, _downloadFile, value[0]);
-}
-function from_candid_record_n17(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
-    id: _UserId;
-    username: string;
-    createdAt: bigint;
-    role: _Role;
-}): {
-    id: UserId;
-    username: string;
-    createdAt: bigint;
-    role: Role;
-} {
-    return {
-        id: value.id,
-        username: value.username,
-        createdAt: value.createdAt,
-        role: from_candid_Role_n18(_uploadFile, _downloadFile, value.role)
-    };
-}
-function from_candid_record_n22(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
-    ign: string;
-    username: string;
-    role: _Role;
-    discordUsername: string;
-}): {
-    ign: string;
-    username: string;
-    role: Role;
-    discordUsername: string;
-} {
-    return {
-        ign: value.ign,
-        username: value.username,
-        role: from_candid_Role_n18(_uploadFile, _downloadFile, value.role),
-        discordUsername: value.discordUsername
-    };
-}
-function from_candid_variant_n10(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
-    ok: Array<_LOARequest>;
-} | {
-    err: string;
-}): {
-    __kind__: "ok";
-    ok: Array<LOARequest>;
-} | {
-    __kind__: "err";
-    err: string;
-} {
-    return "ok" in value ? {
-        __kind__: "ok",
-        ok: value.ok
-    } : "err" in value ? {
-        __kind__: "err",
-        err: value.err
-    } : value;
-}
-function from_candid_variant_n12(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
-    ok: Array<_PunishmentLog>;
-} | {
-    err: string;
-}): {
-    __kind__: "ok";
-    ok: Array<PunishmentLog>;
-} | {
-    __kind__: "err";
-    err: string;
-} {
-    return "ok" in value ? {
-        __kind__: "ok",
-        ok: value.ok
-    } : "err" in value ? {
-        __kind__: "err",
-        err: value.err
-    } : value;
-}
-function from_candid_variant_n14(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
-    ok: Array<_PublicUser>;
-} | {
-    err: string;
-}): {
-    __kind__: "ok";
-    ok: Array<PublicUser>;
-} | {
-    __kind__: "err";
-    err: string;
-} {
-    return "ok" in value ? {
-        __kind__: "ok",
-        ok: from_candid_vec_n15(_uploadFile, _downloadFile, value.ok)
-    } : "err" in value ? {
-        __kind__: "err",
-        err: value.err
-    } : value;
-}
-function from_candid_variant_n19(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
-    CoOwner: null;
-} | {
-    StaffBuilder: null;
-} | {
-    Owner: null;
-}): Role {
-    return "CoOwner" in value ? Role.CoOwner : "StaffBuilder" in value ? Role.StaffBuilder : "Owner" in value ? Role.Owner : value;
-}
-function from_candid_variant_n24(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
-    admin: null;
-} | {
-    user: null;
-} | {
-    guest: null;
-}): UserRole {
-    return "admin" in value ? UserRole.admin : "user" in value ? UserRole.user : "guest" in value ? UserRole.guest : value;
-}
-function from_candid_variant_n26(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
-    ok: _PublicUser;
-} | {
-    err: string;
-}): {
-    __kind__: "ok";
-    ok: PublicUser;
-} | {
-    __kind__: "err";
-    err: string;
-} {
-    return "ok" in value ? {
-        __kind__: "ok",
-        ok: from_candid_PublicUser_n16(_uploadFile, _downloadFile, value.ok)
-    } : "err" in value ? {
-        __kind__: "err",
-        err: value.err
-    } : value;
-}
-function from_candid_variant_n28(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
-    ok: _WebhookConfig;
-} | {
-    err: string;
-}): {
-    __kind__: "ok";
-    ok: WebhookConfig;
-} | {
-    __kind__: "err";
-    err: string;
-} {
-    return "ok" in value ? {
-        __kind__: "ok",
-        ok: value.ok
-    } : "err" in value ? {
-        __kind__: "err",
-        err: value.err
-    } : value;
-}
-function from_candid_variant_n32(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
-    ok: bigint;
-} | {
-    err: string;
-}): {
-    __kind__: "ok";
-    ok: bigint;
-} | {
-    __kind__: "err";
-    err: string;
-} {
-    return "ok" in value ? {
-        __kind__: "ok",
-        ok: value.ok
-    } : "err" in value ? {
-        __kind__: "err",
-        err: value.err
-    } : value;
-}
-function from_candid_variant_n4(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
-    ok: null;
-} | {
-    err: string;
-}): {
-    __kind__: "ok";
-    ok: null;
-} | {
-    __kind__: "err";
-    err: string;
-} {
-    return "ok" in value ? {
-        __kind__: "ok",
-        ok: value.ok
-    } : "err" in value ? {
-        __kind__: "err",
-        err: value.err
-    } : value;
-}
-function from_candid_variant_n8(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
-    ok: _UserId;
-} | {
-    err: string;
-}): {
-    __kind__: "ok";
-    ok: UserId;
-} | {
-    __kind__: "err";
-    err: string;
-} {
-    return "ok" in value ? {
-        __kind__: "ok",
-        ok: value.ok
-    } : "err" in value ? {
-        __kind__: "err",
-        err: value.err
-    } : value;
-}
-function from_candid_vec_n15(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: Array<_PublicUser>): Array<PublicUser> {
-    return value.map((x)=>from_candid_PublicUser_n16(_uploadFile, _downloadFile, x));
-}
-function to_candid_Role_n5(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: Role): _Role {
-    return to_candid_variant_n6(_uploadFile, _downloadFile, value);
-}
-function to_candid_UserProfile_n29(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: UserProfile): _UserProfile {
-    return to_candid_record_n30(_uploadFile, _downloadFile, value);
-}
-function to_candid_UserRole_n1(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: UserRole): _UserRole {
-    return to_candid_variant_n2(_uploadFile, _downloadFile, value);
-}
-function to_candid_record_n30(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
-    ign: string;
-    username: string;
-    role: Role;
-    discordUsername: string;
-}): {
-    ign: string;
-    username: string;
-    role: _Role;
-    discordUsername: string;
-} {
-    return {
-        ign: value.ign,
-        username: value.username,
-        role: to_candid_Role_n5(_uploadFile, _downloadFile, value.role),
-        discordUsername: value.discordUsername
-    };
-}
-function to_candid_variant_n2(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: UserRole): {
-    admin: null;
-} | {
-    user: null;
-} | {
-    guest: null;
-} {
-    return value == UserRole.admin ? {
-        admin: null
-    } : value == UserRole.user ? {
-        user: null
-    } : value == UserRole.guest ? {
-        guest: null
-    } : value;
-}
-function to_candid_variant_n6(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: Role): {
-    CoOwner: null;
-} | {
-    StaffBuilder: null;
-} | {
-    Owner: null;
-} {
-    return value == Role.CoOwner ? {
-        CoOwner: null
-    } : value == Role.StaffBuilder ? {
-        StaffBuilder: null
-    } : value == Role.Owner ? {
-        Owner: null
-    } : value;
-}
+
+// ─── Actor factory ────────────────────────────────────────────────────────────
+
 export interface CreateActorOptions {
-    agent?: Agent;
-    agentOptions?: HttpAgentOptions;
-    actorOptions?: ActorConfig;
-    processError?: (error: unknown) => never;
+  agent?: Agent;
+  agentOptions?: HttpAgentOptions;
+  actorOptions?: ActorConfig;
+  processError?: (error: unknown) => never;
 }
-export function createActor(canisterId: string, _uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, options: CreateActorOptions = {}): Backend {
-    const agent = options.agent || HttpAgent.createSync({
-        ...options.agentOptions
-    });
-    if (options.agent && options.agentOptions) {
-        console.warn("Detected both agent and agentOptions passed to createActor. Ignoring agentOptions and proceeding with the provided agent.");
-    }
-    const actor = Actor.createActor<_SERVICE>(idlFactory, {
-        agent,
-        canisterId: canisterId,
-        ...options.actorOptions
-    });
-    return new Backend(actor, _uploadFile, _downloadFile, options.processError);
+
+export function createActor(
+  canisterId: string,
+  _uploadFile: (file: ExternalBlob) => Promise<Uint8Array>,
+  _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>,
+  options: CreateActorOptions = {},
+): Backend {
+  const agent = options.agent || HttpAgent.createSync({ ...options.agentOptions });
+  if (options.agent && options.agentOptions) {
+    console.warn("Detected both agent and agentOptions passed to createActor. Ignoring agentOptions and proceeding with the provided agent.");
+  }
+  const actor = Actor.createActor<_SERVICE>(idlFactory, {
+    agent,
+    canisterId,
+    ...options.actorOptions,
+  });
+  return new Backend(actor, _uploadFile, _downloadFile, options.processError);
 }

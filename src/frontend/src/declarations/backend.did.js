@@ -8,135 +8,143 @@
 
 import { IDL } from '@icp-sdk/core/candid';
 
+// ─── Caffeine framework role (MixinAuthorization) ────────────────────────────
 export const UserRole = IDL.Variant({
   'admin' : IDL.Null,
-  'user' : IDL.Null,
+  'user'  : IDL.Null,
   'guest' : IDL.Null,
 });
-export const Result_1 = IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text });
+
+// ─── LBS4 custom role hierarchy ─────────────────────────────────────────────
 export const Role = IDL.Variant({
+  'Owner'   : IDL.Null,
   'CoOwner' : IDL.Null,
-  'StaffBuilder' : IDL.Null,
-  'Owner' : IDL.Null,
+  'Staff'   : IDL.Null,
+  'Builder' : IDL.Null,
 });
-export const UserId = IDL.Nat;
-export const Result_7 = IDL.Variant({ 'ok' : UserId, 'err' : IDL.Text });
-export const http_header = IDL.Record({
-  'value' : IDL.Text,
-  'name' : IDL.Text,
+
+export const UserStatus = IDL.Variant({
+  'Active'    : IDL.Null,
+  'Suspended' : IDL.Null,
 });
-export const http_request_result = IDL.Record({
-  'status' : IDL.Nat,
-  'body' : IDL.Vec(IDL.Nat8),
-  'headers' : IDL.Vec(http_header),
-});
-export const TransformationInput = IDL.Record({
-  'context' : IDL.Vec(IDL.Nat8),
-  'response' : http_request_result,
-});
-export const TransformationOutput = IDL.Record({
-  'status' : IDL.Nat,
-  'body' : IDL.Vec(IDL.Nat8),
-  'headers' : IDL.Vec(http_header),
-});
-export const LOARequest = IDL.Record({
-  'id' : IDL.Nat,
-  'ign' : IDL.Text,
-  'active' : IDL.Bool,
-  'submittedBy' : IDL.Text,
-  'timestamp' : IDL.Int,
-  'discordUsername' : IDL.Text,
-  'leaveDate' : IDL.Text,
-  'returnDate' : IDL.Text,
-});
-export const Result_6 = IDL.Variant({
-  'ok' : IDL.Vec(LOARequest),
-  'err' : IDL.Text,
-});
-export const PunishmentLog = IDL.Record({
-  'id' : IDL.Nat,
-  'ign' : IDL.Text,
-  'rnd' : IDL.Text,
-  'offenseNumber' : IDL.Nat,
-  'submittedBy' : IDL.Text,
-  'timestamp' : IDL.Int,
-  'proof' : IDL.Text,
-});
-export const Result_5 = IDL.Variant({
-  'ok' : IDL.Vec(PunishmentLog),
-  'err' : IDL.Text,
-});
+
+// ─── Domain records ──────────────────────────────────────────────────────────
 export const PublicUser = IDL.Record({
-  'id' : UserId,
-  'username' : IDL.Text,
+  'id'        : IDL.Nat,
+  'username'  : IDL.Text,
+  'role'      : Role,
+  'status'    : UserStatus,
   'createdAt' : IDL.Int,
-  'role' : Role,
 });
-export const Result_4 = IDL.Variant({
-  'ok' : IDL.Vec(PublicUser),
-  'err' : IDL.Text,
+
+export const SessionData = IDL.Record({
+  'token'     : IDL.Text,
+  'userId'    : IDL.Nat,
+  'username'  : IDL.Text,
+  'role'      : Role,
+  'createdAt' : IDL.Int,
+  'expiresAt' : IDL.Int,
 });
-export const UserProfile = IDL.Record({
-  'ign' : IDL.Text,
-  'username' : IDL.Text,
-  'role' : Role,
-  'discordUsername' : IDL.Text,
+
+export const AuditLogEntry = IDL.Record({
+  'id'          : IDL.Nat,
+  'actorId'     : IDL.Nat,
+  'action'      : IDL.Text,
+  'performedBy' : IDL.Text,
+  'targetUser'  : IDL.Opt(IDL.Text),
+  'details'     : IDL.Text,
+  'timestamp'   : IDL.Int,
 });
-export const Result_2 = IDL.Variant({ 'ok' : PublicUser, 'err' : IDL.Text });
-export const WebhookConfig = IDL.Record({
-  'loaWebhookUrl' : IDL.Text,
+
+export const FailedLoginAttempt = IDL.Record({
+  'username'  : IDL.Text,
+  'timestamp' : IDL.Int,
+});
+
+export const WebhookSettings = IDL.Record({
   'punishmentWebhookUrl' : IDL.Text,
 });
-export const Result_3 = IDL.Variant({ 'ok' : WebhookConfig, 'err' : IDL.Text });
-export const Result = IDL.Variant({ 'ok' : IDL.Nat, 'err' : IDL.Text });
+
+export const LOARequest = IDL.Record({
+  'id'              : IDL.Nat,
+  'ign'             : IDL.Text,
+  'discordUsername' : IDL.Text,
+  'leaveDate'       : IDL.Text,
+  'returnDate'      : IDL.Text,
+  'submittedBy'     : IDL.Text,
+  'timestamp'       : IDL.Int,
+  'active'          : IDL.Bool,
+});
+
+export const PunishmentRecord = IDL.Record({
+  'id'            : IDL.Nat,
+  'playerIGN'     : IDL.Text,
+  'altAccounts'   : IDL.Vec(IDL.Text),
+  'category'      : IDL.Text,
+  'offenseNumber' : IDL.Nat,
+  'duration'      : IDL.Text,
+  'reason'        : IDL.Text,
+  'proofUrl'      : IDL.Text,
+  'issuedBy'      : IDL.Text,
+  'timestamp'     : IDL.Int,
+  'appealed'      : IDL.Bool,
+  'appealId'      : IDL.Opt(IDL.Nat),
+});
+
+// ─── Result variants ─────────────────────────────────────────────────────────
+export const Result_1  = IDL.Variant({ 'ok' : IDL.Null,                    'err' : IDL.Text });
+export const Result_2  = IDL.Variant({ 'ok' : PublicUser,                  'err' : IDL.Text });
+export const Result_3  = IDL.Variant({ 'ok' : SessionData,                 'err' : IDL.Text });
+export const Result_4  = IDL.Variant({ 'ok' : IDL.Nat,                     'err' : IDL.Text });
+export const Result_5  = IDL.Variant({ 'ok' : IDL.Vec(PublicUser),         'err' : IDL.Text });
+export const Result_6  = IDL.Variant({ 'ok' : IDL.Vec(AuditLogEntry),      'err' : IDL.Text });
+export const Result_7  = IDL.Variant({ 'ok' : IDL.Vec(FailedLoginAttempt), 'err' : IDL.Text });
+export const Result_8  = IDL.Variant({ 'ok' : WebhookSettings,             'err' : IDL.Text });
+export const Result_9  = IDL.Variant({ 'ok' : IDL.Vec(LOARequest),         'err' : IDL.Text });
+export const Result_10 = IDL.Variant({ 'ok' : IDL.Vec(PunishmentRecord),   'err' : IDL.Text });
 
 export const idlService = IDL.Service({
+  // ── MixinAuthorization (Caffeine framework) ──────────────────────────────
   '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
   'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
-  'changePassword' : IDL.Func([IDL.Text, IDL.Text], [Result_1], []),
-  'createStaffAccount' : IDL.Func(
-      [IDL.Principal, IDL.Text, IDL.Text, Role],
-      [Result_7],
-      [],
-    ),
-  'deactivateLOA' : IDL.Func([IDL.Nat], [Result_1], []),
-  'dummyTransform' : IDL.Func(
-      [TransformationInput],
-      [TransformationOutput],
-      ['query'],
-    ),
-  'getActiveLOACount' : IDL.Func([], [IDL.Nat], ['query']),
-  'getAllLOARequests' : IDL.Func([], [Result_6], ['query']),
-  'getAllPunishmentLogs' : IDL.Func([], [Result_5], ['query']),
-  'getAllUsers' : IDL.Func([], [Result_4], ['query']),
-  'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
-  'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
-  'getCurrentUser' : IDL.Func([], [Result_2], ['query']),
-  'getPunishmentLogCount' : IDL.Func([], [IDL.Nat], ['query']),
-  'getUserProfile' : IDL.Func(
-      [IDL.Principal],
-      [IDL.Opt(UserProfile)],
-      ['query'],
-    ),
-  'getWebhookConfig' : IDL.Func([], [Result_3], ['query']),
-  'initializeBackend' : IDL.Func([IDL.Text], [], []),
-  'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
-  'login' : IDL.Func([IDL.Text, IDL.Text], [Result_2], []),
-  'logout' : IDL.Func([], [Result_1], []),
-  'promoteUser' : IDL.Func([IDL.Principal, Role], [Result_1], []),
-  'removeStaffAccount' : IDL.Func([IDL.Principal], [Result_1], []),
-  'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
+  'getCallerUserRole'    : IDL.Func([], [UserRole], ['query']),
+  'isCallerAdmin'        : IDL.Func([], [IDL.Bool], ['query']),
+
+  // ── Custom auth ──────────────────────────────────────────────────────────
+  'loginWithCredentials' : IDL.Func([IDL.Text, IDL.Text], [Result_3], []),
+  'validateSession'      : IDL.Func([IDL.Text], [Result_2], []),
+  'logoutSession'        : IDL.Func([IDL.Text], [], []),
+
+  // ── User management ──────────────────────────────────────────────────────
+  'createUser'     : IDL.Func([IDL.Text, IDL.Text, IDL.Text, Role], [Result_4], []),
+  'removeUser'     : IDL.Func([IDL.Text, IDL.Text], [Result_1], []),
+  'suspendUser'    : IDL.Func([IDL.Text, IDL.Text], [Result_1], []),
+  'activateUser'   : IDL.Func([IDL.Text, IDL.Text], [Result_1], []),
+  'updateUserRole' : IDL.Func([IDL.Text, IDL.Text, Role], [Result_1], []),
+  'changePassword' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [Result_1], []),
+  'getAllUsers'     : IDL.Func([IDL.Text], [Result_5], []),
+
+  // ── Audit log ────────────────────────────────────────────────────────────
+  'getAuditLog'            : IDL.Func([IDL.Text], [Result_6], []),
+  'getFailedLoginAttempts' : IDL.Func([IDL.Text], [Result_7], []),
+
+  // ── Webhook config ───────────────────────────────────────────────────────
+  'getWebhookConfig' : IDL.Func([IDL.Text], [Result_8], []),
   'setWebhookConfig' : IDL.Func([IDL.Text, IDL.Text], [Result_1], []),
-  'submitLOARequest' : IDL.Func(
-      [IDL.Text, IDL.Text, IDL.Text, IDL.Text],
-      [Result],
-      [],
-    ),
+
+  // ── LOA ──────────────────────────────────────────────────────────────────
+  'submitLOARequest'  : IDL.Func([IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text], [Result_4], []),
+  'getAllLOARequests'  : IDL.Func([IDL.Text], [Result_9], []),
+  'deactivateLOA'     : IDL.Func([IDL.Text, IDL.Nat], [Result_1], []),
+
+  // ── Punishments ──────────────────────────────────────────────────────────
   'submitPunishmentLog' : IDL.Func(
-      [IDL.Text, IDL.Text, IDL.Nat, IDL.Text],
-      [Result],
-      [],
-    ),
+    [IDL.Text, IDL.Text, IDL.Text, IDL.Nat, IDL.Text, IDL.Text, IDL.Text, IDL.Vec(IDL.Text)],
+    [Result_4],
+    [],
+  ),
+  'getAllPunishmentLogs'  : IDL.Func([IDL.Text], [Result_10], []),
+  'getPunishmentLogCount' : IDL.Func([], [IDL.Nat], []),
 });
 
 export const idlInitArgs = [];
@@ -144,130 +152,120 @@ export const idlInitArgs = [];
 export const idlFactory = ({ IDL }) => {
   const UserRole = IDL.Variant({
     'admin' : IDL.Null,
-    'user' : IDL.Null,
+    'user'  : IDL.Null,
     'guest' : IDL.Null,
   });
-  const Result_1 = IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text });
   const Role = IDL.Variant({
+    'Owner'   : IDL.Null,
     'CoOwner' : IDL.Null,
-    'StaffBuilder' : IDL.Null,
-    'Owner' : IDL.Null,
+    'Staff'   : IDL.Null,
+    'Builder' : IDL.Null,
   });
-  const UserId = IDL.Nat;
-  const Result_7 = IDL.Variant({ 'ok' : UserId, 'err' : IDL.Text });
-  const http_header = IDL.Record({ 'value' : IDL.Text, 'name' : IDL.Text });
-  const http_request_result = IDL.Record({
-    'status' : IDL.Nat,
-    'body' : IDL.Vec(IDL.Nat8),
-    'headers' : IDL.Vec(http_header),
-  });
-  const TransformationInput = IDL.Record({
-    'context' : IDL.Vec(IDL.Nat8),
-    'response' : http_request_result,
-  });
-  const TransformationOutput = IDL.Record({
-    'status' : IDL.Nat,
-    'body' : IDL.Vec(IDL.Nat8),
-    'headers' : IDL.Vec(http_header),
-  });
-  const LOARequest = IDL.Record({
-    'id' : IDL.Nat,
-    'ign' : IDL.Text,
-    'active' : IDL.Bool,
-    'submittedBy' : IDL.Text,
-    'timestamp' : IDL.Int,
-    'discordUsername' : IDL.Text,
-    'leaveDate' : IDL.Text,
-    'returnDate' : IDL.Text,
-  });
-  const Result_6 = IDL.Variant({
-    'ok' : IDL.Vec(LOARequest),
-    'err' : IDL.Text,
-  });
-  const PunishmentLog = IDL.Record({
-    'id' : IDL.Nat,
-    'ign' : IDL.Text,
-    'rnd' : IDL.Text,
-    'offenseNumber' : IDL.Nat,
-    'submittedBy' : IDL.Text,
-    'timestamp' : IDL.Int,
-    'proof' : IDL.Text,
-  });
-  const Result_5 = IDL.Variant({
-    'ok' : IDL.Vec(PunishmentLog),
-    'err' : IDL.Text,
+  const UserStatus = IDL.Variant({
+    'Active'    : IDL.Null,
+    'Suspended' : IDL.Null,
   });
   const PublicUser = IDL.Record({
-    'id' : UserId,
-    'username' : IDL.Text,
+    'id'        : IDL.Nat,
+    'username'  : IDL.Text,
+    'role'      : Role,
+    'status'    : UserStatus,
     'createdAt' : IDL.Int,
-    'role' : Role,
   });
-  const Result_4 = IDL.Variant({
-    'ok' : IDL.Vec(PublicUser),
-    'err' : IDL.Text,
+  const SessionData = IDL.Record({
+    'token'     : IDL.Text,
+    'userId'    : IDL.Nat,
+    'username'  : IDL.Text,
+    'role'      : Role,
+    'createdAt' : IDL.Int,
+    'expiresAt' : IDL.Int,
   });
-  const UserProfile = IDL.Record({
-    'ign' : IDL.Text,
-    'username' : IDL.Text,
-    'role' : Role,
-    'discordUsername' : IDL.Text,
+  const AuditLogEntry = IDL.Record({
+    'id'          : IDL.Nat,
+    'actorId'     : IDL.Nat,
+    'action'      : IDL.Text,
+    'performedBy' : IDL.Text,
+    'targetUser'  : IDL.Opt(IDL.Text),
+    'details'     : IDL.Text,
+    'timestamp'   : IDL.Int,
   });
-  const Result_2 = IDL.Variant({ 'ok' : PublicUser, 'err' : IDL.Text });
-  const WebhookConfig = IDL.Record({
-    'loaWebhookUrl' : IDL.Text,
+  const FailedLoginAttempt = IDL.Record({
+    'username'  : IDL.Text,
+    'timestamp' : IDL.Int,
+  });
+  const WebhookSettings = IDL.Record({
     'punishmentWebhookUrl' : IDL.Text,
   });
-  const Result_3 = IDL.Variant({ 'ok' : WebhookConfig, 'err' : IDL.Text });
-  const Result = IDL.Variant({ 'ok' : IDL.Nat, 'err' : IDL.Text });
-  
+  const LOARequest = IDL.Record({
+    'id'              : IDL.Nat,
+    'ign'             : IDL.Text,
+    'discordUsername' : IDL.Text,
+    'leaveDate'       : IDL.Text,
+    'returnDate'      : IDL.Text,
+    'submittedBy'     : IDL.Text,
+    'timestamp'       : IDL.Int,
+    'active'          : IDL.Bool,
+  });
+  const PunishmentRecord = IDL.Record({
+    'id'            : IDL.Nat,
+    'playerIGN'     : IDL.Text,
+    'altAccounts'   : IDL.Vec(IDL.Text),
+    'category'      : IDL.Text,
+    'offenseNumber' : IDL.Nat,
+    'duration'      : IDL.Text,
+    'reason'        : IDL.Text,
+    'proofUrl'      : IDL.Text,
+    'issuedBy'      : IDL.Text,
+    'timestamp'     : IDL.Int,
+    'appealed'      : IDL.Bool,
+    'appealId'      : IDL.Opt(IDL.Nat),
+  });
+  const Result_1  = IDL.Variant({ 'ok' : IDL.Null,                    'err' : IDL.Text });
+  const Result_2  = IDL.Variant({ 'ok' : PublicUser,                  'err' : IDL.Text });
+  const Result_3  = IDL.Variant({ 'ok' : SessionData,                 'err' : IDL.Text });
+  const Result_4  = IDL.Variant({ 'ok' : IDL.Nat,                     'err' : IDL.Text });
+  const Result_5  = IDL.Variant({ 'ok' : IDL.Vec(PublicUser),         'err' : IDL.Text });
+  const Result_6  = IDL.Variant({ 'ok' : IDL.Vec(AuditLogEntry),      'err' : IDL.Text });
+  const Result_7  = IDL.Variant({ 'ok' : IDL.Vec(FailedLoginAttempt), 'err' : IDL.Text });
+  const Result_8  = IDL.Variant({ 'ok' : WebhookSettings,             'err' : IDL.Text });
+  const Result_9  = IDL.Variant({ 'ok' : IDL.Vec(LOARequest),         'err' : IDL.Text });
+  const Result_10 = IDL.Variant({ 'ok' : IDL.Vec(PunishmentRecord),   'err' : IDL.Text });
+
   return IDL.Service({
     '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
     'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
-    'changePassword' : IDL.Func([IDL.Text, IDL.Text], [Result_1], []),
-    'createStaffAccount' : IDL.Func(
-        [IDL.Principal, IDL.Text, IDL.Text, Role],
-        [Result_7],
-        [],
-      ),
-    'deactivateLOA' : IDL.Func([IDL.Nat], [Result_1], []),
-    'dummyTransform' : IDL.Func(
-        [TransformationInput],
-        [TransformationOutput],
-        ['query'],
-      ),
-    'getActiveLOACount' : IDL.Func([], [IDL.Nat], ['query']),
-    'getAllLOARequests' : IDL.Func([], [Result_6], ['query']),
-    'getAllPunishmentLogs' : IDL.Func([], [Result_5], ['query']),
-    'getAllUsers' : IDL.Func([], [Result_4], ['query']),
-    'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
-    'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
-    'getCurrentUser' : IDL.Func([], [Result_2], ['query']),
-    'getPunishmentLogCount' : IDL.Func([], [IDL.Nat], ['query']),
-    'getUserProfile' : IDL.Func(
-        [IDL.Principal],
-        [IDL.Opt(UserProfile)],
-        ['query'],
-      ),
-    'getWebhookConfig' : IDL.Func([], [Result_3], ['query']),
-    'initializeBackend' : IDL.Func([IDL.Text], [], []),
-    'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
-    'login' : IDL.Func([IDL.Text, IDL.Text], [Result_2], []),
-    'logout' : IDL.Func([], [Result_1], []),
-    'promoteUser' : IDL.Func([IDL.Principal, Role], [Result_1], []),
-    'removeStaffAccount' : IDL.Func([IDL.Principal], [Result_1], []),
-    'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
+    'getCallerUserRole'    : IDL.Func([], [UserRole], ['query']),
+    'isCallerAdmin'        : IDL.Func([], [IDL.Bool], ['query']),
+
+    'loginWithCredentials' : IDL.Func([IDL.Text, IDL.Text], [Result_3], []),
+    'validateSession'      : IDL.Func([IDL.Text], [Result_2], []),
+    'logoutSession'        : IDL.Func([IDL.Text], [], []),
+
+    'createUser'     : IDL.Func([IDL.Text, IDL.Text, IDL.Text, Role], [Result_4], []),
+    'removeUser'     : IDL.Func([IDL.Text, IDL.Text], [Result_1], []),
+    'suspendUser'    : IDL.Func([IDL.Text, IDL.Text], [Result_1], []),
+    'activateUser'   : IDL.Func([IDL.Text, IDL.Text], [Result_1], []),
+    'updateUserRole' : IDL.Func([IDL.Text, IDL.Text, Role], [Result_1], []),
+    'changePassword' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [Result_1], []),
+    'getAllUsers'     : IDL.Func([IDL.Text], [Result_5], []),
+
+    'getAuditLog'            : IDL.Func([IDL.Text], [Result_6], []),
+    'getFailedLoginAttempts' : IDL.Func([IDL.Text], [Result_7], []),
+
+    'getWebhookConfig' : IDL.Func([IDL.Text], [Result_8], []),
     'setWebhookConfig' : IDL.Func([IDL.Text, IDL.Text], [Result_1], []),
-    'submitLOARequest' : IDL.Func(
-        [IDL.Text, IDL.Text, IDL.Text, IDL.Text],
-        [Result],
-        [],
-      ),
+
+    'submitLOARequest'  : IDL.Func([IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text], [Result_4], []),
+    'getAllLOARequests'  : IDL.Func([IDL.Text], [Result_9], []),
+    'deactivateLOA'     : IDL.Func([IDL.Text, IDL.Nat], [Result_1], []),
+
     'submitPunishmentLog' : IDL.Func(
-        [IDL.Text, IDL.Text, IDL.Nat, IDL.Text],
-        [Result],
-        [],
-      ),
+      [IDL.Text, IDL.Text, IDL.Text, IDL.Nat, IDL.Text, IDL.Text, IDL.Text, IDL.Vec(IDL.Text)],
+      [Result_4],
+      [],
+    ),
+    'getAllPunishmentLogs'   : IDL.Func([IDL.Text], [Result_10], []),
+    'getPunishmentLogCount' : IDL.Func([], [IDL.Nat], []),
   });
 };
 

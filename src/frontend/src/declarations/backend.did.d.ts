@@ -10,110 +10,121 @@ import type { ActorMethod } from '@icp-sdk/core/agent';
 import type { IDL } from '@icp-sdk/core/candid';
 import type { Principal } from '@icp-sdk/core/principal';
 
-export interface LOARequest {
-  'id' : bigint,
-  'ign' : string,
-  'active' : boolean,
-  'submittedBy' : string,
-  'timestamp' : bigint,
-  'discordUsername' : string,
-  'leaveDate' : string,
-  'returnDate' : string,
-}
+// ─── Enums / Variants ───────────────────────────────────────────────────────────
+export type UserRole = { 'admin' : null } | { 'user' : null } | { 'guest' : null };
+export type Role = { 'Owner' : null } | { 'CoOwner' : null } | { 'Staff' : null } | { 'Builder' : null };
+export type UserStatus = { 'Active' : null } | { 'Suspended' : null };
+
+// ─── Domain records ───────────────────────────────────────────────────────────
 export interface PublicUser {
-  'id' : UserId,
-  'username' : string,
-  'createdAt' : bigint,
-  'role' : Role,
+  'id'        : bigint;
+  'username'  : string;
+  'role'      : Role;
+  'status'    : UserStatus;
+  'createdAt' : bigint;
 }
-export interface PunishmentLog {
-  'id' : bigint,
-  'ign' : string,
-  'rnd' : string,
-  'offenseNumber' : bigint,
-  'submittedBy' : string,
-  'timestamp' : bigint,
-  'proof' : string,
+export interface SessionData {
+  'token'     : string;
+  'userId'    : bigint;
+  'username'  : string;
+  'role'      : Role;
+  'createdAt' : bigint;
+  'expiresAt' : bigint;
 }
-export type Result = { 'ok' : bigint } |
-  { 'err' : string };
-export type Result_1 = { 'ok' : null } |
-  { 'err' : string };
-export type Result_2 = { 'ok' : PublicUser } |
-  { 'err' : string };
-export type Result_3 = { 'ok' : WebhookConfig } |
-  { 'err' : string };
-export type Result_4 = { 'ok' : Array<PublicUser> } |
-  { 'err' : string };
-export type Result_5 = { 'ok' : Array<PunishmentLog> } |
-  { 'err' : string };
-export type Result_6 = { 'ok' : Array<LOARequest> } |
-  { 'err' : string };
-export type Result_7 = { 'ok' : UserId } |
-  { 'err' : string };
-export type Role = { 'CoOwner' : null } |
-  { 'StaffBuilder' : null } |
-  { 'Owner' : null };
-export interface TransformationInput {
-  'context' : Uint8Array,
-  'response' : http_request_result,
+export interface AuditLogEntry {
+  'id'          : bigint;
+  'actorId'     : bigint;
+  'action'      : string;
+  'performedBy' : string;
+  'targetUser'  : [] | [string];
+  'details'     : string;
+  'timestamp'   : bigint;
 }
-export interface TransformationOutput {
-  'status' : bigint,
-  'body' : Uint8Array,
-  'headers' : Array<http_header>,
+export interface FailedLoginAttempt {
+  'username'  : string;
+  'timestamp' : bigint;
 }
-export type UserId = bigint;
-export interface UserProfile {
-  'ign' : string,
-  'username' : string,
-  'role' : Role,
-  'discordUsername' : string,
+export interface WebhookSettings {
+  'punishmentWebhookUrl' : string;
 }
-export type UserRole = { 'admin' : null } |
-  { 'user' : null } |
-  { 'guest' : null };
-export interface WebhookConfig {
-  'loaWebhookUrl' : string,
-  'punishmentWebhookUrl' : string,
+export interface LOARequest {
+  'id'              : bigint;
+  'ign'             : string;
+  'discordUsername' : string;
+  'leaveDate'       : string;
+  'returnDate'      : string;
+  'submittedBy'     : string;
+  'timestamp'       : bigint;
+  'active'          : boolean;
 }
-export interface http_header { 'value' : string, 'name' : string }
-export interface http_request_result {
-  'status' : bigint,
-  'body' : Uint8Array,
-  'headers' : Array<http_header>,
+export interface PunishmentRecord {
+  'id'            : bigint;
+  'playerIGN'     : string;
+  'altAccounts'   : Array<string>;
+  'category'      : string;
+  'offenseNumber' : bigint;
+  'duration'      : string;
+  'reason'        : string;
+  'proofUrl'      : string;
+  'issuedBy'      : string;
+  'timestamp'     : bigint;
+  'appealed'      : boolean;
+  'appealId'      : [] | [bigint];
 }
+
+// ─── Result types ────────────────────────────────────────────────────────────
+export type Result_1  = { 'ok' : null }                    | { 'err' : string };
+export type Result_2  = { 'ok' : PublicUser }              | { 'err' : string };
+export type Result_3  = { 'ok' : SessionData }             | { 'err' : string };
+export type Result_4  = { 'ok' : bigint }                  | { 'err' : string };
+export type Result_5  = { 'ok' : Array<PublicUser> }       | { 'err' : string };
+export type Result_6  = { 'ok' : Array<AuditLogEntry> }    | { 'err' : string };
+export type Result_7  = { 'ok' : Array<FailedLoginAttempt> } | { 'err' : string };
+export type Result_8  = { 'ok' : WebhookSettings }         | { 'err' : string };
+export type Result_9  = { 'ok' : Array<LOARequest> }       | { 'err' : string };
+export type Result_10 = { 'ok' : Array<PunishmentRecord> } | { 'err' : string };
+
+// ─── Service ──────────────────────────────────────────────────────────────────
 export interface _SERVICE {
-  '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
-  'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
-  'changePassword' : ActorMethod<[string, string], Result_1>,
-  'createStaffAccount' : ActorMethod<
-    [Principal, string, string, Role],
-    Result_7
-  >,
-  'deactivateLOA' : ActorMethod<[bigint], Result_1>,
-  'dummyTransform' : ActorMethod<[TransformationInput], TransformationOutput>,
-  'getActiveLOACount' : ActorMethod<[], bigint>,
-  'getAllLOARequests' : ActorMethod<[], Result_6>,
-  'getAllPunishmentLogs' : ActorMethod<[], Result_5>,
-  'getAllUsers' : ActorMethod<[], Result_4>,
-  'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
-  'getCallerUserRole' : ActorMethod<[], UserRole>,
-  'getCurrentUser' : ActorMethod<[], Result_2>,
-  'getPunishmentLogCount' : ActorMethod<[], bigint>,
-  'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
-  'getWebhookConfig' : ActorMethod<[], Result_3>,
-  'initializeBackend' : ActorMethod<[string], undefined>,
-  'isCallerAdmin' : ActorMethod<[], boolean>,
-  'login' : ActorMethod<[string, string], Result_2>,
-  'logout' : ActorMethod<[], Result_1>,
-  'promoteUser' : ActorMethod<[Principal, Role], Result_1>,
-  'removeStaffAccount' : ActorMethod<[Principal], Result_1>,
-  'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
-  'setWebhookConfig' : ActorMethod<[string, string], Result_1>,
-  'submitLOARequest' : ActorMethod<[string, string, string, string], Result>,
-  'submitPunishmentLog' : ActorMethod<[string, string, bigint, string], Result>,
+  // MixinAuthorization
+  '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>;
+  'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>;
+  'getCallerUserRole'    : ActorMethod<[], UserRole>;
+  'isCallerAdmin'        : ActorMethod<[], boolean>;
+
+  // Custom auth
+  'loginWithCredentials' : ActorMethod<[string, string], Result_3>;
+  'validateSession'      : ActorMethod<[string], Result_2>;
+  'logoutSession'        : ActorMethod<[string], undefined>;
+
+  // User management
+  'createUser'     : ActorMethod<[string, string, string, Role], Result_4>;
+  'removeUser'     : ActorMethod<[string, string], Result_1>;
+  'suspendUser'    : ActorMethod<[string, string], Result_1>;
+  'activateUser'   : ActorMethod<[string, string], Result_1>;
+  'updateUserRole' : ActorMethod<[string, string, Role], Result_1>;
+  'changePassword' : ActorMethod<[string, string, string], Result_1>;
+  'getAllUsers'     : ActorMethod<[string], Result_5>;
+
+  // Audit log
+  'getAuditLog'            : ActorMethod<[string], Result_6>;
+  'getFailedLoginAttempts' : ActorMethod<[string], Result_7>;
+
+  // Webhook
+  'getWebhookConfig' : ActorMethod<[string], Result_8>;
+  'setWebhookConfig' : ActorMethod<[string, string], Result_1>;
+
+  // LOA
+  'submitLOARequest' : ActorMethod<[string, string, string, string, string], Result_4>;
+  'getAllLOARequests' : ActorMethod<[string], Result_9>;
+  'deactivateLOA'    : ActorMethod<[string, bigint], Result_1>;
+
+  // Punishments
+  'submitPunishmentLog'  : ActorMethod<[string, string, string, bigint, string, string, string, Array<string>], Result_4>;
+  'getAllPunishmentLogs'  : ActorMethod<[string], Result_10>;
+  'getPunishmentLogCount' : ActorMethod<[], bigint>;
 }
+
 export declare const idlService: IDL.ServiceClass;
 export declare const idlInitArgs: IDL.Type[];
 export declare const idlFactory: IDL.InterfaceFactory;
