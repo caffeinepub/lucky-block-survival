@@ -89,15 +89,6 @@ export const WebhookConfig = IDL.Record({
 });
 export const Result_3 = IDL.Variant({ 'ok' : WebhookConfig, 'err' : IDL.Text });
 export const Result = IDL.Variant({ 'ok' : IDL.Nat, 'err' : IDL.Text });
-export const DiscordSessionData = IDL.Record({
-  'token' : IDL.Text,
-  'discordId' : IDL.Text,
-  'username' : IDL.Text,
-  'avatar' : IDL.Text,
-  'role' : IDL.Text,
-  'createdAt' : IDL.Int,
-});
-export const Result_8 = IDL.Variant({ 'ok' : DiscordSessionData, 'err' : IDL.Text });
 
 export const idlService = IDL.Service({
   '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
@@ -109,8 +100,6 @@ export const idlService = IDL.Service({
       [],
     ),
   'deactivateLOA' : IDL.Func([IDL.Nat], [Result_1], []),
-  'discordCallback' : IDL.Func([IDL.Text, IDL.Text], [Result_8], []),
-  'discordLogout' : IDL.Func([IDL.Text], [], []),
   'dummyTransform' : IDL.Func(
       [TransformationInput],
       [TransformationOutput],
@@ -123,7 +112,6 @@ export const idlService = IDL.Service({
   'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
   'getCurrentUser' : IDL.Func([], [Result_2], ['query']),
-  'getDiscordSession' : IDL.Func([IDL.Text], [IDL.Opt(DiscordSessionData)], ['query']),
   'getPunishmentLogCount' : IDL.Func([], [IDL.Nat], ['query']),
   'getUserProfile' : IDL.Func(
       [IDL.Principal],
@@ -232,15 +220,6 @@ export const idlFactory = ({ IDL }) => {
   });
   const Result_3 = IDL.Variant({ 'ok' : WebhookConfig, 'err' : IDL.Text });
   const Result = IDL.Variant({ 'ok' : IDL.Nat, 'err' : IDL.Text });
-  const DiscordSessionData = IDL.Record({
-    'token' : IDL.Text,
-    'discordId' : IDL.Text,
-    'username' : IDL.Text,
-    'avatar' : IDL.Text,
-    'role' : IDL.Text,
-    'createdAt' : IDL.Int,
-  });
-  const Result_8 = IDL.Variant({ 'ok' : DiscordSessionData, 'err' : IDL.Text });
   
   return IDL.Service({
     '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
@@ -252,8 +231,6 @@ export const idlFactory = ({ IDL }) => {
         [],
       ),
     'deactivateLOA' : IDL.Func([IDL.Nat], [Result_1], []),
-    'discordCallback' : IDL.Func([IDL.Text, IDL.Text], [Result_8], []),
-    'discordLogout' : IDL.Func([IDL.Text], [], []),
     'dummyTransform' : IDL.Func(
         [TransformationInput],
         [TransformationOutput],
@@ -266,7 +243,6 @@ export const idlFactory = ({ IDL }) => {
     'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
     'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
     'getCurrentUser' : IDL.Func([], [Result_2], ['query']),
-    'getDiscordSession' : IDL.Func([IDL.Text], [IDL.Opt(DiscordSessionData)], ['query']),
     'getPunishmentLogCount' : IDL.Func([], [IDL.Nat], ['query']),
     'getUserProfile' : IDL.Func(
         [IDL.Principal],

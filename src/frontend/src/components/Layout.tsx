@@ -248,7 +248,7 @@ export function Layout({
             }}
           >
             <img
-              src="/assets/uploads/lbsleakpvp-picsart-aiimageenhancer-019d3518-77e8-775a-891a-286b41767600-4.png"
+              src="/assets/uploads/colosseum_inside-019d317c-6bae-74f9-a799-9394318dfaeb-1.png"
               alt="LBS4 Portal"
               style={{ width: "32px", height: "32px", objectFit: "cover" }}
               onError={(e) => {

@@ -1,33 +1,16 @@
-import { Actor, HttpAgent } from "@dfinity/agent";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { SiDiscord } from "react-icons/si";
 import { type DiscordUser, saveDiscordSession } from "../contexts/AuthContext";
-import { idlFactory } from "../declarations/backend.did";
-
-// v2025-refresh
-
-async function getCanisterId(): Promise<string> {
-  try {
-    const r = await fetch("/env.json");
-    const j = await r.json();
-    const id = j.backend_canister_id;
-    if (id && id !== "undefined") return id;
-  } catch (_) {
-    /* ignore */
-  }
-  const envMeta = import.meta as unknown as { env?: Record<string, string> };
-  const envId = envMeta.env?.CANISTER_ID_BACKEND;
-  if (envId) return envId;
-  throw new Error("Could not determine canister ID");
-}
+import { useActor } from "../hooks/useActor";
 
 export function CallbackPage() {
+  const { actor, isFetching } = useActor();
   const [error, setError] = useState<string | null>(null);
   const hasCalledRef = useRef(false);
 
   useEffect(() => {
-    if (hasCalledRef.current) return;
+    if (isFetching || !actor || hasCalledRef.current) return;
     hasCalledRef.current = true;
 
     const params = new URLSearchParams(window.location.search);
@@ -41,71 +24,26 @@ export function CallbackPage() {
 
     (async () => {
       try {
-        const canisterId = await getCanisterId();
-        console.log("[Auth] Using canister ID:", canisterId);
-
-        const agent = new HttpAgent({ host: "https://ic0.app" });
-
-        // Use @dfinity/agent directly — bypasses generated Backend wrapper
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const rawActor = Actor.createActor(idlFactory as any, {
-          agent,
-          canisterId,
-        }) as Record<string, (...args: unknown[]) => Promise<unknown>>;
-
-        console.log(
-          "[Auth] Has discordCallback:",
-          typeof rawActor.discordCallback,
-        );
-
-        if (typeof rawActor.discordCallback !== "function") {
-          throw new Error(
-            `discordCallback not found. Available: ${Object.keys(Object.getPrototypeOf(rawActor)).join(", ")}`,
-          );
-        }
-
-        const result = (await rawActor.discordCallback(code, redirectUri)) as
-          | {
-              ok: {
-                token: string;
-                discordId: string;
-                username: string;
-                avatar: string;
-                role: string;
-                createdAt: bigint;
-              };
-            }
-          | { err: string };
-
-        console.log("[Auth] Result:", result);
-
-        if ("ok" in result) {
-          const raw = result.ok;
-          const data: DiscordUser = {
-            token: raw.token,
-            discordId: raw.discordId,
-            username: raw.username,
-            avatar: raw.avatar,
-            role: raw.role,
-            createdAt: raw.createdAt,
-          };
+        const result = await (actor as any).discordCallback(code, redirectUri);
+        if (result?.__kind__ === "ok") {
+          const data = result.ok as DiscordUser;
           saveDiscordSession(data);
           window.location.href = "/";
-        } else if ("err" in result) {
-          setError(
-            result.err ||
-              "Access denied. You do not have a valid staff role on this server.",
-          );
         } else {
-          setError("Unexpected response from authentication server.");
+          const errMsg =
+            result?.err ??
+            "Access denied. You may not have a valid staff role on this server.";
+          setError(errMsg);
         }
       } catch (e) {
-        console.error("[Auth] Discord callback error:", e);
-        const msg = e instanceof Error ? e.message : String(e);
-        setError(`Authentication error: ${msg}`);
+        console.error("Discord callback error:", e);
+        setError(
+          "Authentication failed. Please try again or contact an admin.",
+        );
       }
     })();
-  }, []);
+  }, [actor, isFetching]);
 
   return (
     <div
@@ -134,12 +72,13 @@ export function CallbackPage() {
           }}
         >
           <img
-            src="/assets/uploads/lbsleakpvp-picsart-aiimageenhancer-019d3518-77e8-775a-891a-286b41767600-4.png"
+            src="/assets/uploads/colosseum_inside-019d317c-6bae-74f9-a799-9394318dfaeb-1.png"
             alt="LBS4"
             style={{ width: "100%", height: "100%", objectFit: "cover" }}
             onError={(e) => {
               (e.currentTarget as HTMLImageElement).src =
-                "/assets/uploads/colosseum_inside-019d317c-6bae-74f9-a799-9394318dfaeb-1.png";
+                "/assets/generated/lucky-block-logo-transparent.dim_200x200.png";
+              (e.currentTarget as HTMLImageElement).style.objectFit = "contain";
             }}
           />
         </div>
@@ -159,11 +98,15 @@ export function CallbackPage() {
                   border: "1px solid rgba(88, 101, 242, 0.3)",
                 }}
               >
-                <Loader2
-                  size={24}
-                  className="animate-spin"
-                  style={{ color: "#5865F2" }}
-                />
+                {isFetching ? (
+                  <Loader2
+                    size={24}
+                    className="animate-spin"
+                    style={{ color: "#5865F2" }}
+                  />
+                ) : (
+                  <SiDiscord size={24} style={{ color: "#5865F2" }} />
+                )}
               </div>
               <div>
                 <p
@@ -231,19 +174,9 @@ export function CallbackPage() {
                     fontSize: "12px",
                     color: "var(--text-secondary)",
                     lineHeight: 1.5,
-                    marginBottom: "10px",
                   }}
                 >
                   {error}
-                </p>
-                <p
-                  style={{
-                    fontSize: "10px",
-                    color: "var(--text-muted)",
-                    lineHeight: 1.6,
-                  }}
-                >
-                  Open the browser console (F12) to see the full error detail.
                 </p>
               </div>
               <a
@@ -260,6 +193,15 @@ export function CallbackPage() {
                   letterSpacing: "0.06em",
                   textDecoration: "none",
                   cursor: "pointer",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "rgba(88, 101, 242, 0.2)";
+                  e.currentTarget.style.boxShadow =
+                    "0 0 16px rgba(88, 101, 242, 0.3)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "rgba(88, 101, 242, 0.12)";
+                  e.currentTarget.style.boxShadow = "none";
                 }}
               >
                 <SiDiscord size={14} />
