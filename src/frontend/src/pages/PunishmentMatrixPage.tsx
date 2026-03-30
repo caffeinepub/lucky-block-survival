@@ -1,7 +1,7 @@
 import { Gavel, Pencil, Search, Trash2, XCircle } from "lucide-react";
 import { useState } from "react";
-import type { PublicUser } from "../backend.d";
 import { addAuditEntry } from "../lib/punishmentAudit";
+import type { PublicUser } from "../types";
 
 interface PunishmentEntry {
   id: string;

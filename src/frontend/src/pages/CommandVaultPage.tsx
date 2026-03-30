@@ -1,7 +1,7 @@
 import { Check, Copy, Terminal } from "lucide-react";
 import { useState } from "react";
-import type { PublicUser } from "../backend.d";
-import { Role } from "../backend.d";
+import type { PublicUser } from "../types";
+import { Role } from "../types";
 
 interface Command {
   cmd: string;

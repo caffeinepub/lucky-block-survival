@@ -10,8 +10,6 @@ import {
   XCircle,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { PublicUser } from "../backend.d";
-import { Role } from "../backend.d";
 import { getMaintenanceMode } from "../lib/moderationSettings";
 import {
   type LocalPunishmentLog,
@@ -19,6 +17,8 @@ import {
   getOffenseCount,
   getPlayerHistory,
 } from "../lib/portalData";
+import type { PublicUser } from "../types";
+import { Role } from "../types";
 
 // ---- Punishment Matrix (predefined, no custom entries) ----------------------
 

@@ -11,8 +11,6 @@ import {
   XCircle,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import type { PublicUser } from "../backend.d";
-import { Role } from "../backend.d";
 import { getMaintenanceMode } from "../lib/moderationSettings";
 import {
   type AppealStatus,
@@ -23,6 +21,8 @@ import {
   getAllPunishmentLogs,
   reviewAppeal,
 } from "../lib/portalData";
+import type { PublicUser } from "../types";
+import { Role } from "../types";
 
 interface AppealsPageProps {
   currentUser: PublicUser;

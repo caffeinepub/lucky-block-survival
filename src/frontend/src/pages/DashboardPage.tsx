@@ -1,7 +1,5 @@
 import { CalendarPlus, Clock, FileText, Gavel, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
-import type { PublicUser } from "../backend.d";
-import { Role } from "../backend.d";
 import { StatCard } from "../components/StatCard";
 import {
   type LocalPunishmentLog,
@@ -9,6 +7,8 @@ import {
   getAllPunishmentLogs,
   getPunishmentLogCount,
 } from "../lib/portalData";
+import type { PublicUser } from "../types";
+import { Role } from "../types";
 
 function getRoleDisplayName(role: Role): string {
   switch (role) {
@@ -16,8 +16,12 @@ function getRoleDisplayName(role: Role): string {
       return "Owner";
     case Role.CoOwner:
       return "Co-Owner";
+    case Role.Staff:
+      return "Staff";
+    case Role.Builder:
+      return "Builder";
     default:
-      return "Staff/Builder";
+      return "Staff";
   }
 }
 
@@ -27,6 +31,8 @@ function getRoleBadgeClass(role: Role): string {
       return "rank-owner";
     case Role.CoOwner:
       return "rank-coowner";
+    case Role.Builder:
+      return "rank-builder";
     default:
       return "rank-staff";
   }

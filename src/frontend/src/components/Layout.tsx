@@ -13,15 +13,16 @@ import {
   Wrench,
 } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
-import type { PublicUser } from "../backend.d";
-import { Role } from "../backend.d";
-import { getDiscordAvatarUrl, useAuth } from "../contexts/AuthContext";
+import { useAuth } from "../contexts/AuthContext";
 import { getMaintenanceMode } from "../lib/moderationSettings";
 import { getPendingAppealsCount } from "../lib/portalData";
+import { type PublicUser, Role } from "../types";
 
 function roleLevel(role: Role): number {
-  if (role === Role.Owner) return 2;
-  if (role === Role.CoOwner) return 1;
+  if (role === Role.Owner) return 3;
+  if (role === Role.CoOwner) return 2;
+  if (role === Role.Staff) return 1;
+  if (role === Role.Builder) return 0;
   return 0;
 }
 
@@ -60,7 +61,7 @@ const navItems: NavItem[] = [
     id: "punishment-matrix",
     label: "PUNISHMENT MATRIX",
     icon: <Gavel size={16} />,
-    minRoleLevel: 1,
+    minRoleLevel: 2,
     ocid: "nav.punishment_matrix_link",
   },
   {
@@ -81,7 +82,7 @@ const navItems: NavItem[] = [
     id: "appeals",
     label: "APPEALS",
     icon: <FileSearch size={16} />,
-    minRoleLevel: 1,
+    minRoleLevel: 2,
     ocid: "nav.appeals_link",
     showBadge: true,
   },
@@ -96,28 +97,28 @@ const navItems: NavItem[] = [
     id: "admin-panel",
     label: "ADMIN PANEL",
     icon: <Settings size={16} />,
-    minRoleLevel: 2,
+    minRoleLevel: 3,
     ocid: "nav.admin_panel_link",
   },
 ];
 
-function getRoleBadgeStyle(discordRole: string) {
-  switch (discordRole) {
-    case "Owner":
+function getRoleBadgeStyle(role: Role) {
+  switch (role) {
+    case Role.Owner:
       return {
         bg: "rgba(245,158,11,0.15)",
         color: "#f59e0b",
         border: "rgba(245,158,11,0.4)",
         label: "Owner",
       };
-    case "CoOwner":
+    case Role.CoOwner:
       return {
         bg: "rgba(147,51,234,0.15)",
         color: "#a855f7",
         border: "rgba(147,51,234,0.4)",
         label: "Co-Owner",
       };
-    case "Builder":
+    case Role.Builder:
       return {
         bg: "rgba(74,222,128,0.12)",
         color: "#4ade80",
@@ -134,6 +135,40 @@ function getRoleBadgeStyle(discordRole: string) {
   }
 }
 
+/** Generate an initials avatar for a username */
+function InitialsAvatar({
+  username,
+  borderColor,
+  size = 36,
+}: {
+  username: string;
+  borderColor: string;
+  size?: number;
+}) {
+  const initials = username.slice(0, 2).toUpperCase();
+  const hue =
+    (username.charCodeAt(0) * 37 +
+      username.charCodeAt(1 % username.length) * 13) %
+    360;
+  return (
+    <div
+      className="flex items-center justify-center rounded-full flex-shrink-0 font-pixel"
+      style={{
+        width: `${size}px`,
+        height: `${size}px`,
+        background: `hsl(${hue}, 55%, 30%)`,
+        border: `1px solid ${borderColor}`,
+        color: "#fff",
+        fontSize: `${Math.floor(size * 0.33)}px`,
+        letterSpacing: "0.04em",
+        userSelect: "none",
+      }}
+    >
+      {initials}
+    </div>
+  );
+}
+
 interface LayoutProps {
   children: ReactNode;
   activePage: string;
@@ -147,7 +182,7 @@ export function Layout({
   setActivePage,
   currentUser,
 }: LayoutProps) {
-  const { discordUser, logout } = useAuth();
+  const { logout } = useAuth();
   const [maintenanceMode, setMaintenanceModeState] = useState(false);
   const [pendingAppeals, setPendingAppeals] = useState(0);
 
@@ -166,12 +201,8 @@ export function Layout({
     (item) => userRoleLevel >= item.minRoleLevel,
   );
 
-  const discordRole = discordUser?.role ?? "Staff";
-  const roleBadge = getRoleBadgeStyle(discordRole);
-  const avatarUrl = discordUser
-    ? getDiscordAvatarUrl(discordUser.discordId, discordUser.avatar)
-    : "https://cdn.discordapp.com/embed/avatars/0.png";
-  const displayName = discordUser?.username ?? currentUser.username;
+  const roleBadge = getRoleBadgeStyle(currentUser.role);
+  const displayName = currentUser.username;
   const maintenanceOffset = maintenanceMode ? "37px" : "0";
 
   return (
@@ -248,14 +279,16 @@ export function Layout({
             }}
           >
             <img
-              src="/assets/uploads/colosseum_inside-019d317c-6bae-74f9-a799-9394318dfaeb-1.png"
+              src="/assets/uploads/lbsleakpvp-picsart-aiimageenhancer-019d3518-77e8-775a-891a-286b41767600-4.png"
               alt="LBS4 Portal"
               style={{ width: "32px", height: "32px", objectFit: "cover" }}
               onError={(e) => {
-                (e.currentTarget as HTMLImageElement).src =
-                  "/assets/generated/lucky-block-logo-transparent.dim_200x200.png";
-                (e.currentTarget as HTMLImageElement).style.objectFit =
-                  "contain";
+                const img = e.currentTarget as HTMLImageElement;
+                img.src =
+                  "/assets/uploads/colosseum_inside-019d317c-6bae-74f9-a799-9394318dfaeb-1.png";
+                img.onerror = () => {
+                  img.style.display = "none";
+                };
               }}
             />
           </div>
@@ -289,7 +322,9 @@ export function Layout({
                 type="button"
                 data-ocid={item.ocid}
                 onClick={() => setActivePage(item.id)}
-                className={`w-full flex items-center gap-3 px-5 py-3 text-left transition-all duration-200 ${isActive ? "nav-active" : ""}`}
+                className={`w-full flex items-center gap-3 px-5 py-3 text-left transition-all duration-200 ${
+                  isActive ? "nav-active" : ""
+                }`}
                 style={{
                   color: isActive
                     ? "var(--accent-purple-bright)"
@@ -346,20 +381,10 @@ export function Layout({
           style={{ borderTop: "1px solid var(--border-subtle)", flexShrink: 0 }}
         >
           <div className="flex items-center gap-3 mb-3">
-            <img
-              src={avatarUrl}
-              alt={displayName}
-              className="rounded-full flex-shrink-0"
-              style={{
-                width: "36px",
-                height: "36px",
-                border: `1px solid ${roleBadge.border}`,
-                objectFit: "cover",
-              }}
-              onError={(e) => {
-                (e.currentTarget as HTMLImageElement).src =
-                  "https://cdn.discordapp.com/embed/avatars/0.png";
-              }}
+            <InitialsAvatar
+              username={displayName}
+              borderColor={roleBadge.border}
+              size={36}
             />
             <div className="flex-1 min-w-0">
               <p
@@ -394,7 +419,7 @@ export function Layout({
           <button
             type="button"
             data-ocid="nav.logout_button"
-            onClick={logout}
+            onClick={() => logout()}
             className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded transition-all duration-200"
             style={{
               background: "rgba(239, 68, 68, 0.08)",
@@ -500,26 +525,15 @@ export function Layout({
             >
               {displayName}
             </span>
-            <img
-              src={avatarUrl}
-              alt="avatar"
-              className="rounded-full"
-              style={{
-                width: "32px",
-                height: "32px",
-                border: `1px solid ${roleBadge.border}`,
-                objectFit: "cover",
-                flexShrink: 0,
-              }}
-              onError={(e) => {
-                (e.currentTarget as HTMLImageElement).src =
-                  "https://cdn.discordapp.com/embed/avatars/0.png";
-              }}
+            <InitialsAvatar
+              username={displayName}
+              borderColor={roleBadge.border}
+              size={32}
             />
             <button
               type="button"
               data-ocid="topbar.logout_button"
-              onClick={logout}
+              onClick={() => logout()}
               className="flex items-center gap-1.5 py-1.5 px-3 rounded transition-all duration-150"
               style={{
                 background: "rgba(239, 68, 68, 0.08)",

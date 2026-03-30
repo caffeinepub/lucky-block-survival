@@ -1,15 +1,17 @@
+import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Scroll, Shield } from "lucide-react";
+import { Loader2, Lock, Scroll, Shield, User } from "lucide-react";
 import { useState } from "react";
-import { SiDiscord } from "react-icons/si";
+import { useAuth } from "../contexts/AuthContext";
 
 const STAFF_RULES = `STAFF RULES & EXPECTATIONS — Lucky Block Survival 4
 
 1. Professionalism & Conduct
 • Constant Professionalism: You represent the server at all times. No offensive language directed at players.
-• Lead by Example: Follow all game and Discord rules.
+• Lead by Example: Follow all game and server rules.
 • Zero Abuse Tolerance: Any abuse of permissions results in immediate demotion.
 
 2. Punishment & Privacy Protocols
@@ -27,17 +29,30 @@ const STAFF_RULES = `STAFF RULES & EXPECTATIONS — Lucky Block Survival 4
 4. Technical Commands
 • Staff/Builder: /staffme, /jail, /free, /checknick, /h kick, /h mute, /checkstats, /checkitem
 • Co-Owner: All above + /selfadmin, /clearinv, /h ban, /adminmenu
-• Owner: Full system access and key generation`;
+• Owner: Full system access`;
 
 export function LoginPage() {
+  const { login } = useAuth();
   const [agreed, setAgreed] = useState(false);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleDiscordLogin = () => {
-    if (!agreed || loading) return;
+  const handleSignIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!agreed || loading || !username.trim() || !password) return;
     setLoading(true);
-    window.location.href =
-      "https://discord.com/oauth2/authorize?client_id=1487232430279622879&response_type=code&redirect_uri=https%3A%2F%2Flucky-block-survival-o1t.caffeine.xyz%2Fcallback&scope=identify%20guilds";
+    setError("");
+    try {
+      await login(username.trim(), password);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Login failed. Please try again.",
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -45,6 +60,7 @@ export function LoginPage() {
       className="min-h-screen flex items-center justify-center relative overflow-hidden"
       style={{ background: "var(--bg-deep)" }}
     >
+      {/* Background gradient */}
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
@@ -52,6 +68,7 @@ export function LoginPage() {
             "radial-gradient(ellipse 60% 50% at 50% 50%, rgba(124, 58, 237, 0.08) 0%, transparent 70%)",
         }}
       />
+      {/* Grid overlay */}
       <div
         className="absolute inset-0 pointer-events-none opacity-5"
         style={{
@@ -62,6 +79,7 @@ export function LoginPage() {
       />
 
       <div className="relative z-10 w-full max-w-lg px-6">
+        {/* Logo & Title */}
         <div className="flex flex-col items-center mb-8 gap-4">
           <div
             className="flex items-center justify-center rounded-xl animate-neon-pulse"
@@ -76,14 +94,16 @@ export function LoginPage() {
             }}
           >
             <img
-              src="/assets/uploads/colosseum_inside-019d317c-6bae-74f9-a799-9394318dfaeb-1.png"
+              src="/assets/uploads/lbsleakpvp-picsart-aiimageenhancer-019d3518-77e8-775a-891a-286b41767600-4.png"
               alt="Lucky Block Survival 4"
               style={{ width: "100%", height: "100%", objectFit: "cover" }}
               onError={(e) => {
-                (e.currentTarget as HTMLImageElement).src =
-                  "/assets/generated/lucky-block-logo-transparent.dim_200x200.png";
-                (e.currentTarget as HTMLImageElement).style.objectFit =
-                  "contain";
+                const img = e.currentTarget as HTMLImageElement;
+                img.src =
+                  "/assets/uploads/colosseum_inside-019d317c-6bae-74f9-a799-9394318dfaeb-1.png";
+                img.onerror = () => {
+                  img.style.display = "none";
+                };
               }}
             />
           </div>
@@ -118,12 +138,14 @@ export function LoginPage() {
               }}
             >
               <Shield size={11} />
-              Authorized Discord staff members only
+              Authorized staff members only
             </p>
           </div>
         </div>
 
+        {/* Login Card */}
         <div className="neon-card scanlines" style={{ padding: "32px 28px" }}>
+          {/* Staff Rules */}
           <div className="mb-5">
             <div className="flex items-center gap-2 mb-3">
               <Scroll
@@ -144,7 +166,7 @@ export function LoginPage() {
             <ScrollArea
               className="rounded-md"
               style={{
-                height: "200px",
+                height: "180px",
                 background: "var(--bg-deep)",
                 border: "1px solid var(--border-subtle)",
               }}
@@ -163,8 +185,9 @@ export function LoginPage() {
             </ScrollArea>
           </div>
 
+          {/* Agreement checkbox */}
           <div
-            className="flex items-start gap-3 rounded-md p-3 mb-6"
+            className="flex items-start gap-3 rounded-md p-3 mb-5"
             style={{
               background: "rgba(124, 58, 237, 0.06)",
               border: "1px solid rgba(124, 58, 237, 0.2)",
@@ -191,63 +214,142 @@ export function LoginPage() {
             </Label>
           </div>
 
-          <button
-            type="button"
-            data-ocid="login.primary_button"
-            onClick={handleDiscordLogin}
-            disabled={!agreed || loading}
-            className="w-full flex items-center justify-center gap-3 py-4 rounded-lg transition-all duration-200"
-            style={{
-              background:
-                agreed && !loading ? "#5865F2" : "rgba(88, 101, 242, 0.2)",
-              border: "1px solid rgba(88, 101, 242, 0.5)",
-              color: agreed && !loading ? "#ffffff" : "rgba(255,255,255,0.3)",
-              cursor: agreed && !loading ? "pointer" : "not-allowed",
-              fontSize: "13px",
-              fontFamily: '"JetBrains Mono", monospace',
-              fontWeight: 700,
-              letterSpacing: "0.04em",
-              boxShadow:
-                agreed && !loading
-                  ? "0 0 20px rgba(88, 101, 242, 0.4)"
-                  : "none",
-            }}
-            onMouseEnter={(e) => {
-              if (!agreed || loading) return;
-              e.currentTarget.style.boxShadow =
-                "0 0 32px rgba(88, 101, 242, 0.6)";
-              e.currentTarget.style.transform = "translateY(-1px)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.boxShadow =
-                agreed && !loading
-                  ? "0 0 20px rgba(88, 101, 242, 0.4)"
-                  : "none";
-              e.currentTarget.style.transform = "translateY(0)";
-            }}
-          >
-            {loading ? (
-              <>
-                <div
-                  className="animate-spin rounded-full flex-shrink-0"
-                  style={{
-                    width: "18px",
-                    height: "18px",
-                    border: "2px solid rgba(255,255,255,0.3)",
-                    borderTopColor: "white",
-                  }}
-                />
-                REDIRECTING...
-              </>
-            ) : (
-              <>
-                <SiDiscord size={20} />
-                LOGIN WITH DISCORD
-              </>
+          {/* Sign-in form */}
+          <form onSubmit={handleSignIn} className="space-y-3">
+            <div className="relative">
+              <User
+                size={13}
+                className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                style={{ color: "var(--text-muted)" }}
+              />
+              <input
+                type="text"
+                data-ocid="login.input"
+                placeholder="Username"
+                autoComplete="username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                disabled={!agreed || loading}
+                style={{
+                  width: "100%",
+                  paddingLeft: "36px",
+                  paddingRight: "12px",
+                  paddingTop: "10px",
+                  paddingBottom: "10px",
+                  background: agreed ? "var(--bg-deep)" : "rgba(13,13,26,0.4)",
+                  border: "1px solid var(--border-subtle)",
+                  borderRadius: "8px",
+                  color: "var(--text-primary)",
+                  fontSize: "13px",
+                  fontFamily: '"JetBrains Mono", monospace',
+                  outline: "none",
+                  transition: "border-color 0.2s",
+                  cursor: agreed ? "text" : "not-allowed",
+                }}
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = "var(--border-glow)";
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = "var(--border-subtle)";
+                }}
+              />
+            </div>
+            <div className="relative">
+              <Lock
+                size={13}
+                className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                style={{ color: "var(--text-muted)" }}
+              />
+              <input
+                type="password"
+                data-ocid="login.input"
+                placeholder="Password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={!agreed || loading}
+                style={{
+                  width: "100%",
+                  paddingLeft: "36px",
+                  paddingRight: "12px",
+                  paddingTop: "10px",
+                  paddingBottom: "10px",
+                  background: agreed ? "var(--bg-deep)" : "rgba(13,13,26,0.4)",
+                  border: "1px solid var(--border-subtle)",
+                  borderRadius: "8px",
+                  color: "var(--text-primary)",
+                  fontSize: "13px",
+                  fontFamily: '"JetBrains Mono", monospace',
+                  outline: "none",
+                  transition: "border-color 0.2s",
+                  cursor: agreed ? "text" : "not-allowed",
+                }}
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = "var(--border-glow)";
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = "var(--border-subtle)";
+                }}
+              />
+            </div>
+
+            {/* Error message */}
+            {error && (
+              <div
+                data-ocid="login.error_state"
+                className="rounded-md px-3 py-2 flex items-center gap-2"
+                style={{
+                  background: "rgba(239, 68, 68, 0.08)",
+                  border: "1px solid rgba(239, 68, 68, 0.3)",
+                  color: "#ef4444",
+                  fontSize: "11px",
+                  fontFamily: '"JetBrains Mono", monospace',
+                }}
+              >
+                ⚠ {error}
+              </div>
             )}
-          </button>
+
+            <Button
+              type="submit"
+              data-ocid="login.primary_button"
+              disabled={!agreed || loading || !username.trim() || !password}
+              className="w-full py-4 font-pixel tracking-widest"
+              style={{
+                fontSize: "11px",
+                background:
+                  agreed && !loading && username.trim() && password
+                    ? "linear-gradient(135deg, var(--accent-purple), var(--accent-purple-bright))"
+                    : "rgba(124, 58, 237, 0.15)",
+                border: "1px solid rgba(124, 58, 237, 0.4)",
+                color:
+                  agreed && !loading && username.trim() && password
+                    ? "#fff"
+                    : "rgba(255,255,255,0.3)",
+                boxShadow:
+                  agreed && !loading && username.trim() && password
+                    ? "0 0 16px rgba(124, 58, 237, 0.4)"
+                    : "none",
+                height: "44px",
+                cursor:
+                  agreed && !loading && username.trim() && password
+                    ? "pointer"
+                    : "not-allowed",
+              }}
+            >
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <Loader2 size={14} className="animate-spin" />
+                  SIGNING IN...
+                </span>
+              ) : (
+                "SIGN IN"
+              )}
+            </Button>
+          </form>
         </div>
 
+        {/* Footer */}
         <p
           className="text-center mt-6"
           style={{ fontSize: "10px", color: "var(--text-muted)" }}

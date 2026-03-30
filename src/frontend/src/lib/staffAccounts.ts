@@ -5,7 +5,7 @@
  * sessions and is not wiped when a new version of the backend is deployed.
  */
 
-import { Role } from "../backend.d";
+import { Role, UserStatus } from "../types";
 import { sha256Hex } from "./crypto";
 
 const ACCOUNTS_KEY = "staff_accounts_v1";
@@ -15,6 +15,7 @@ export interface StaffAccount {
   username: string;
   passwordHash: string;
   role: Role;
+  status: UserStatus;
   createdAt: number; // Unix ms
   strikes?: number; // 0–3
 }
@@ -25,7 +26,12 @@ function loadAccounts(): StaffAccount[] {
   try {
     const raw = localStorage.getItem(ACCOUNTS_KEY);
     if (!raw) return [];
-    return JSON.parse(raw) as StaffAccount[];
+    const parsed = JSON.parse(raw) as StaffAccount[];
+    // Backfill status for accounts created before this field existed
+    return parsed.map((a) => ({
+      ...a,
+      status: a.status ?? UserStatus.Active,
+    }));
   } catch {
     return [];
   }
@@ -48,13 +54,13 @@ export function ensureOwnerExists(): void {
     (a) => a.role === Role.Owner && a.username === OWNER_USERNAME,
   );
   if (!ownerExists) {
-    // Remove any stale owner accounts with a different username
     const withoutOldOwner = accounts.filter((a) => a.role !== Role.Owner);
     withoutOldOwner.unshift({
       id: 1,
       username: OWNER_USERNAME,
       passwordHash: OWNER_PASSWORD_HASH,
       role: Role.Owner,
+      status: UserStatus.Active,
       createdAt: Date.now(),
       strikes: 0,
     });
@@ -87,6 +93,7 @@ export async function createAccount(
     username,
     passwordHash,
     role,
+    status: UserStatus.Active,
     createdAt: Date.now(),
     strikes: 0,
   };
@@ -100,16 +107,33 @@ export function removeAccount(id: number): boolean {
   const accounts = loadAccounts();
   const idx = accounts.findIndex((a) => a.id === id);
   if (idx === -1) return false;
-  // Prevent removing the owner
   if (accounts[idx].role === Role.Owner) return false;
   accounts.splice(idx, 1);
   saveAccounts(accounts);
   return true;
 }
 
+export function suspendAccount(id: number): boolean {
+  const accounts = loadAccounts();
+  const idx = accounts.findIndex((a) => a.id === id);
+  if (idx === -1) return false;
+  if (accounts[idx].role === Role.Owner) return false;
+  accounts[idx].status = UserStatus.Suspended;
+  saveAccounts(accounts);
+  return true;
+}
+
+export function activateAccount(id: number): boolean {
+  const accounts = loadAccounts();
+  const idx = accounts.findIndex((a) => a.id === id);
+  if (idx === -1) return false;
+  accounts[idx].status = UserStatus.Active;
+  saveAccounts(accounts);
+  return true;
+}
+
 /**
  * Increment strikes for a staff member (max 3).
- * Returns false if account not found.
  */
 export function addStrike(id: number): boolean {
   const accounts = loadAccounts();
@@ -123,7 +147,6 @@ export function addStrike(id: number): boolean {
 
 /**
  * Decrement strikes for a staff member (min 0).
- * Returns false if account not found.
  */
 export function removeStrike(id: number): boolean {
   const accounts = loadAccounts();
@@ -137,6 +160,7 @@ export function removeStrike(id: number): boolean {
 
 /**
  * Verify credentials. Returns the matching account or null.
+ * Also rejects suspended accounts.
  */
 export async function verifyCredentials(
   username: string,

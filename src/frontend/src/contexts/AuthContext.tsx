@@ -5,98 +5,120 @@ import {
   useEffect,
   useState,
 } from "react";
-import { Role } from "../backend.d";
-import type { PublicUser } from "../backend.d";
+import { createActorWithConfig } from "../config";
+import { sha256Hex } from "../lib/crypto";
+import { type PublicUser, Role, UserStatus } from "../types";
 
-export interface DiscordUser {
-  token: string;
-  discordId: string;
-  username: string;
-  avatar: string;
-  role: string;
-  createdAt: bigint;
-}
-
-const SESSION_TOKEN_KEY = "discord_session_token";
-const SESSION_USER_KEY = "discord_user";
-
-export function discordRoleToPublicRole(discordRole: string): Role {
-  if (discordRole === "Owner") return Role.Owner;
-  if (discordRole === "CoOwner") return Role.CoOwner;
-  return Role.StaffBuilder;
-}
-
-export function discordUserToPublicUser(user: DiscordUser): PublicUser {
-  return {
-    id: BigInt(user.discordId),
-    username: user.username,
-    role: discordRoleToPublicRole(user.role),
-    createdAt: user.createdAt,
-  };
-}
-
-export function getDiscordAvatarUrl(discordId: string, avatar: string): string {
-  if (!avatar) return "https://cdn.discordapp.com/embed/avatars/0.png";
-  return `https://cdn.discordapp.com/avatars/${discordId}/${avatar}.png`;
-}
-
-export function saveDiscordSession(data: DiscordUser): void {
-  localStorage.setItem(SESSION_TOKEN_KEY, data.token);
-  localStorage.setItem(
-    SESSION_USER_KEY,
-    JSON.stringify(data, (_, v) => (typeof v === "bigint" ? v.toString() : v)),
-  );
-}
-
-export function clearDiscordSession(): void {
-  localStorage.removeItem(SESSION_TOKEN_KEY);
-  localStorage.removeItem(SESSION_USER_KEY);
-}
-
-export function loadDiscordSession(): DiscordUser | null {
-  try {
-    const raw = localStorage.getItem(SESSION_USER_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return {
-      ...parsed,
-      createdAt: BigInt(parsed.createdAt ?? 0),
-    } as DiscordUser;
-  } catch {
-    return null;
-  }
-}
+const SESSION_TOKEN_KEY = "lbs4_session_token";
 
 interface AuthContextValue {
-  discordUser: DiscordUser | null;
+  currentUser: PublicUser | null;
+  sessionToken: string | null;
   loading: boolean;
-  logout: () => void;
+  login: (username: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue>({
-  discordUser: null,
+  currentUser: null,
+  sessionToken: null,
   loading: true,
-  logout: () => {},
+  login: async () => {},
+  logout: async () => {},
 });
 
+/**
+ * Ensure a PublicUser always has a `status` field.
+ * After backend.d.ts regenerates this cast is unnecessary, but kept for safety.
+ */
+function coerceUser(raw: any): PublicUser {
+  return {
+    id: raw.id ?? BigInt(0),
+    username: raw.username ?? "",
+    role: raw.role ?? Role.Staff,
+    status: raw.status ?? UserStatus.Active,
+    createdAt: raw.createdAt ?? BigInt(0),
+  };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [discordUser, setDiscordUser] = useState<DiscordUser | null>(null);
+  const [currentUser, setCurrentUser] = useState<PublicUser | null>(null);
+  const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // On mount: validate any stored session token
   useEffect(() => {
-    const stored = loadDiscordSession();
-    setDiscordUser(stored);
-    setLoading(false);
+    const storedToken = localStorage.getItem(SESSION_TOKEN_KEY);
+    if (!storedToken) {
+      setLoading(false);
+      return;
+    }
+    (async () => {
+      try {
+        const actor = (await createActorWithConfig()) as any;
+        const result = await actor.validateSession(storedToken);
+        if (result?.__kind__ === "ok") {
+          setCurrentUser(coerceUser(result.ok));
+          setSessionToken(storedToken);
+        } else {
+          localStorage.removeItem(SESSION_TOKEN_KEY);
+        }
+      } catch {
+        localStorage.removeItem(SESSION_TOKEN_KEY);
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, []);
 
-  const logout = () => {
-    clearDiscordSession();
-    setDiscordUser(null);
+  /**
+   * Login with username and password.
+   * Hashes the password with SHA-256 before sending.
+   * Throws with an error message on failure.
+   */
+  const login = async (username: string, password: string): Promise<void> => {
+    const hash = await sha256Hex(password);
+    const actor = (await createActorWithConfig()) as any;
+    const result = await actor.loginWithCredentials(username, hash);
+    if (result?.__kind__ === "err") {
+      throw new Error(result.err as string);
+    }
+    if (!result || result.__kind__ !== "ok") {
+      throw new Error("Unexpected response from server.");
+    }
+    const sessionData = result.ok;
+    const token: string = sessionData.token;
+    localStorage.setItem(SESSION_TOKEN_KEY, token);
+    setSessionToken(token);
+    // Fetch the full user via validateSession
+    const userResult = await actor.validateSession(token);
+    if (userResult?.__kind__ === "ok") {
+      setCurrentUser(coerceUser(userResult.ok));
+    } else {
+      throw new Error("Failed to load user profile after login.");
+    }
+  };
+
+  const logout = async (): Promise<void> => {
+    const token = localStorage.getItem(SESSION_TOKEN_KEY);
+    if (token) {
+      try {
+        const actor = (await createActorWithConfig()) as any;
+        await actor.logoutSession(token);
+      } catch {
+        // Ignore logout errors — local state is still cleared
+      }
+    }
+    localStorage.removeItem(SESSION_TOKEN_KEY);
+    setCurrentUser(null);
+    setSessionToken(null);
     window.location.href = "/";
   };
 
   return (
-    <AuthContext.Provider value={{ discordUser, loading, logout }}>
+    <AuthContext.Provider
+      value={{ currentUser, sessionToken, loading, login, logout }}
+    >
       {children}
     </AuthContext.Provider>
   );

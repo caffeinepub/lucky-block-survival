@@ -19,8 +19,8 @@ import {
   XCircle,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import type { PublicUser } from "../backend.d";
-import { Role } from "../backend.d";
+import { createActorWithConfig } from "../config";
+import { useAuth } from "../contexts/AuthContext";
 import {
   getMaintenanceMode,
   getWebhookConfig,
@@ -33,13 +33,17 @@ import {
 } from "../lib/portalData";
 import {
   type StaffAccount,
+  activateAccount,
   addStrike,
   createAccount,
   getAllAccounts,
   removeAccount,
   removeStrike,
+  suspendAccount,
 } from "../lib/staffAccounts";
 import { generateSyncCode, importSyncCode } from "../lib/syncCode";
+import type { PublicUser } from "../types";
+import { Role, UserStatus } from "../types";
 
 function getRoleDisplayName(role: Role): string {
   switch (role) {
@@ -47,8 +51,12 @@ function getRoleDisplayName(role: Role): string {
       return "Owner";
     case Role.CoOwner:
       return "Co-Owner";
+    case Role.Staff:
+      return "Staff";
+    case Role.Builder:
+      return "Builder";
     default:
-      return "Staff/Builder";
+      return "Staff";
   }
 }
 
@@ -58,6 +66,8 @@ function getRoleBadgeClass(role: Role): string {
       return "rank-owner";
     case Role.CoOwner:
       return "rank-coowner";
+    case Role.Builder:
+      return "rank-builder";
     default:
       return "rank-staff";
   }
@@ -240,6 +250,7 @@ interface AdminPanelPageProps {
 }
 
 export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
+  const { sessionToken } = useAuth();
   const [activeTab, setActiveTab] = useState<
     "staff" | "webhook" | "logs" | "sync" | "maintenance"
   >("staff");
@@ -252,7 +263,7 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newUsername, setNewUsername] = useState("");
   const [newPassword, setNewPassword] = useState("");
-  const [newRole, setNewRole] = useState<Role>(Role.StaffBuilder);
+  const [newRole, setNewRole] = useState<Role>(Role.Staff);
   const [createLoading, setCreateLoading] = useState(false);
   const [createSuccess, setCreateSuccess] = useState(false);
   const [createError, setCreateError] = useState("");
@@ -333,7 +344,7 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
         setCreateSuccess(true);
         setNewUsername("");
         setNewPassword("");
-        setNewRole(Role.StaffBuilder);
+        setNewRole(Role.Staff);
         fetchUsers();
         setTimeout(() => {
           setCreateSuccess(false);
@@ -351,6 +362,36 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
 
   const handleDeleteAccount = (accountId: number) => {
     removeAccount(accountId);
+    fetchUsers();
+  };
+
+  const handleSuspendAccount = async (accountId: number, username: string) => {
+    // Update local state
+    suspendAccount(accountId);
+    // Also call backend if we have a session token
+    if (sessionToken) {
+      try {
+        const actor = (await createActorWithConfig()) as any;
+        await actor.suspendUser(sessionToken, username);
+      } catch {
+        // Backend call failed; local state still updated
+      }
+    }
+    fetchUsers();
+  };
+
+  const handleActivateAccount = async (accountId: number, username: string) => {
+    // Update local state
+    activateAccount(accountId);
+    // Also call backend if we have a session token
+    if (sessionToken) {
+      try {
+        const actor = (await createActorWithConfig()) as any;
+        await actor.activateUser(sessionToken, username);
+      } catch {
+        // Backend call failed; local state still updated
+      }
+    }
     fetchUsers();
   };
 
@@ -720,10 +761,16 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
                       style={{ ...inputStyle, cursor: "pointer" }}
                     >
                       <option
-                        value={Role.StaffBuilder}
+                        value={Role.Staff}
                         style={{ background: "var(--bg-deep)" }}
                       >
-                        Staff/Builder
+                        Staff
+                      </option>
+                      <option
+                        value={Role.Builder}
+                        style={{ background: "var(--bg-deep)" }}
+                      >
+                        Builder
                       </option>
                       <option
                         value={Role.CoOwner}
@@ -829,6 +876,7 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
                     <tr>
                       <th>USERNAME &amp; STRIKES</th>
                       <th>ROLE</th>
+                      <th>STATUS</th>
                       <th>CREATED AT</th>
                       <th>ID</th>
                       <th>ACTIONS</th>
@@ -876,6 +924,27 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
                             {getRoleDisplayName(user.role)}
                           </span>
                         </td>
+                        <td>
+                          <span
+                            className="font-pixel inline-block px-2 py-0.5 rounded"
+                            style={{
+                              fontSize: "8px",
+                              background:
+                                user.status === UserStatus.Suspended
+                                  ? "rgba(239, 68, 68, 0.12)"
+                                  : "rgba(74, 222, 128, 0.12)",
+                              color:
+                                user.status === UserStatus.Suspended
+                                  ? "#ef4444"
+                                  : "#4ade80",
+                              border: `1px solid ${user.status === UserStatus.Suspended ? "rgba(239,68,68,0.35)" : "rgba(74,222,128,0.35)"}`,
+                            }}
+                          >
+                            {user.status === UserStatus.Suspended
+                              ? "SUSPENDED"
+                              : "ACTIVE"}
+                          </span>
+                        </td>
                         <td
                           style={{
                             fontSize: "12px",
@@ -894,39 +963,99 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
                           #{String(user.id)}
                         </td>
                         <td>
-                          {user.role !== Role.Owner && (
-                            <button
-                              type="button"
-                              data-ocid={
-                                idx < 3
-                                  ? `admin.staff.delete_button.${idx + 1}`
-                                  : "admin.staff.delete_button"
-                              }
-                              onClick={() => handleDeleteAccount(user.id)}
-                              className="flex items-center gap-1.5 px-3 py-1.5 rounded transition-all duration-200"
-                              style={{
-                                background: "rgba(239, 68, 68, 0.08)",
-                                border: "1px solid rgba(239, 68, 68, 0.3)",
-                                color: "#ef4444",
-                                fontSize: "9px",
-                                fontFamily: '"JetBrains Mono", monospace',
-                                fontWeight: 700,
-                                cursor: "pointer",
-                                letterSpacing: "0.06em",
-                              }}
-                              title="Remove account"
-                            >
-                              <Trash2 size={10} />
-                              REMOVE
-                            </button>
-                          )}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {user.role !== Role.Owner &&
+                              isOwner &&
+                              (user.status === UserStatus.Suspended ? (
+                                <button
+                                  type="button"
+                                  data-ocid={
+                                    idx < 3
+                                      ? `admin.staff.toggle.${idx + 1}`
+                                      : "admin.staff.toggle"
+                                  }
+                                  onClick={() =>
+                                    handleActivateAccount(
+                                      user.id,
+                                      user.username,
+                                    )
+                                  }
+                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded transition-all duration-200"
+                                  style={{
+                                    background: "rgba(74, 222, 128, 0.08)",
+                                    border: "1px solid rgba(74, 222, 128, 0.3)",
+                                    color: "#4ade80",
+                                    fontSize: "9px",
+                                    fontFamily: '"JetBrains Mono", monospace',
+                                    fontWeight: 700,
+                                    cursor: "pointer",
+                                    letterSpacing: "0.06em",
+                                  }}
+                                  title="Activate account"
+                                >
+                                  ACTIVATE
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  data-ocid={
+                                    idx < 3
+                                      ? `admin.staff.toggle.${idx + 1}`
+                                      : "admin.staff.toggle"
+                                  }
+                                  onClick={() =>
+                                    handleSuspendAccount(user.id, user.username)
+                                  }
+                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded transition-all duration-200"
+                                  style={{
+                                    background: "rgba(245, 158, 11, 0.08)",
+                                    border: "1px solid rgba(245, 158, 11, 0.3)",
+                                    color: "#f59e0b",
+                                    fontSize: "9px",
+                                    fontFamily: '"JetBrains Mono", monospace',
+                                    fontWeight: 700,
+                                    cursor: "pointer",
+                                    letterSpacing: "0.06em",
+                                  }}
+                                  title="Suspend account"
+                                >
+                                  SUSPEND
+                                </button>
+                              ))}
+                            {user.role !== Role.Owner && (
+                              <button
+                                type="button"
+                                data-ocid={
+                                  idx < 3
+                                    ? `admin.staff.delete_button.${idx + 1}`
+                                    : "admin.staff.delete_button"
+                                }
+                                onClick={() => handleDeleteAccount(user.id)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded transition-all duration-200"
+                                style={{
+                                  background: "rgba(239, 68, 68, 0.08)",
+                                  border: "1px solid rgba(239, 68, 68, 0.3)",
+                                  color: "#ef4444",
+                                  fontSize: "9px",
+                                  fontFamily: '"JetBrains Mono", monospace',
+                                  fontWeight: 700,
+                                  cursor: "pointer",
+                                  letterSpacing: "0.06em",
+                                }}
+                                title="Remove account"
+                              >
+                                <Trash2 size={10} />
+                                REMOVE
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
                     {users.length === 0 && (
                       <tr>
                         <td
-                          colSpan={5}
+                          colSpan={6}
                           data-ocid="admin.staff.empty_state"
                           className="text-center py-12"
                           style={{

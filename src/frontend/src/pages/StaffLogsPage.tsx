@@ -9,12 +9,12 @@ import {
   Trash2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import type { PublicUser } from "../backend.d";
 import {
   type LocalPunishmentLog,
   getAllPunishmentLogs,
 } from "../lib/portalData";
 import { type AuditEntry, getAuditEntries } from "../lib/punishmentAudit";
+import type { PublicUser } from "../types";
 import { EvidenceLightbox } from "./PunishmentLoggerPage";
 
 function formatTimestamp(ts: number): string {

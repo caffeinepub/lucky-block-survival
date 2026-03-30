@@ -1,15 +1,9 @@
 import { Toaster } from "@/components/ui/sonner";
 import { useState } from "react";
-import type { PublicUser } from "./backend.d";
 import { Layout } from "./components/Layout";
-import {
-  AuthProvider,
-  discordUserToPublicUser,
-  useAuth,
-} from "./contexts/AuthContext";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { AdminPanelPage } from "./pages/AdminPanelPage";
 import { AppealsPage } from "./pages/AppealsPage";
-import { CallbackPage } from "./pages/CallbackPage";
 import { CommandVaultPage } from "./pages/CommandVaultPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { LeaveRequestsPage } from "./pages/LeaveRequestsPage";
@@ -20,7 +14,7 @@ import { StaffConductPage } from "./pages/StaffConductPage";
 import { StaffLogsPage } from "./pages/StaffLogsPage";
 
 function AppShell() {
-  const { discordUser, loading } = useAuth();
+  const { currentUser, loading } = useAuth();
   const [activePage, setActivePage] = useState("dashboard");
 
   if (loading) {
@@ -64,7 +58,7 @@ function AppShell() {
     );
   }
 
-  if (!discordUser) {
+  if (!currentUser) {
     return (
       <>
         <LoginPage />
@@ -72,8 +66,6 @@ function AppShell() {
       </>
     );
   }
-
-  const currentUser: PublicUser = discordUserToPublicUser(discordUser);
 
   const renderPage = () => {
     switch (activePage) {
@@ -125,23 +117,6 @@ function AppShell() {
 }
 
 export default function App() {
-  const path = window.location.pathname;
-  const params = new URLSearchParams(window.location.search);
-  const isCallback =
-    path === "/callback" ||
-    path.endsWith("/callback") ||
-    path.includes("/callback?") ||
-    (path === "/" && params.has("code"));
-
-  if (isCallback) {
-    return (
-      <AuthProvider>
-        <CallbackPage />
-        <Toaster />
-      </AuthProvider>
-    );
-  }
-
   return (
     <AuthProvider>
       <AppShell />
