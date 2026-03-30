@@ -1,174 +1,260 @@
+/**
+ * backend.d.ts — Manual type declarations for the LBS4 Motoko backend.
+ *
+ * This file documents the ACTUAL current API exposed by main.mo.
+ * It is NOT auto-generated. Keep it in sync with the Motoko canister.
+ *
+ * NOTE: The auto-generated backend.ts uses @ts-nocheck and may lag behind
+ * this file during development. AuthContext and other callers use
+ * `createActorWithConfig() as any` to bypass the stale generated types.
+ *
+ * Pages and lib files MUST import Role, PublicUser, UserStatus from
+ * '../types' (not from this file) to avoid duplicate enum conflicts.
+ */
+
 import type { Principal } from "@icp-sdk/core/principal";
-export interface Some<T> {
-    __kind__: "Some";
-    value: T;
-}
-export interface None {
-    __kind__: "None";
-}
-export type Option<T> = Some<T> | None;
-export type Result_2 = {
-    __kind__: "ok";
-    ok: PublicUser;
-} | {
-    __kind__: "err";
-    err: string;
-};
-export interface TransformationOutput {
-    status: bigint;
-    body: Uint8Array;
-    headers: Array<http_header>;
-}
-export type Result_6 = {
-    __kind__: "ok";
-    ok: Array<LOARequest>;
-} | {
-    __kind__: "err";
-    err: string;
-};
-export type Result_5 = {
-    __kind__: "ok";
-    ok: Array<PunishmentLog>;
-} | {
-    __kind__: "err";
-    err: string;
-};
-export interface PublicUser {
-    id: UserId;
-    username: string;
-    createdAt: bigint;
-    role: Role;
-}
-export type Result_1 = {
-    __kind__: "ok";
-    ok: null;
-} | {
-    __kind__: "err";
-    err: string;
-};
-export interface http_header {
-    value: string;
-    name: string;
-}
-export type Result_4 = {
-    __kind__: "ok";
-    ok: Array<PublicUser>;
-} | {
-    __kind__: "err";
-    err: string;
-};
-export type UserId = bigint;
-export interface http_request_result {
-    status: bigint;
-    body: Uint8Array;
-    headers: Array<http_header>;
-}
-export type Result = {
-    __kind__: "ok";
-    ok: bigint;
-} | {
-    __kind__: "err";
-    err: string;
-};
-export type Result_3 = {
-    __kind__: "ok";
-    ok: WebhookConfig;
-} | {
-    __kind__: "err";
-    err: string;
-};
-export interface PunishmentLog {
-    id: bigint;
-    ign: string;
-    rnd: string;
-    offenseNumber: bigint;
-    submittedBy: string;
-    timestamp: bigint;
-    proof: string;
-}
-export interface WebhookConfig {
-    loaWebhookUrl: string;
-    punishmentWebhookUrl: string;
-}
-export interface TransformationInput {
-    context: Uint8Array;
-    response: http_request_result;
-}
-export type Result_7 = {
-    __kind__: "ok";
-    ok: UserId;
-} | {
-    __kind__: "err";
-    err: string;
-};
-export interface LOARequest {
-    id: bigint;
-    ign: string;
-    active: boolean;
-    submittedBy: string;
-    timestamp: bigint;
-    discordUsername: string;
-    leaveDate: string;
-    returnDate: string;
-}
-export interface UserProfile {
-    ign: string;
-    username: string;
-    role: Role;
-    discordUsername: string;
-}
+
+// ============================================================
+// Enums
+// ============================================================
+
+/**
+ * Staff role hierarchy: Owner > CoOwner > Staff > Builder
+ * Canonical source of truth is ../types.ts — import from there in pages.
+ */
 export enum Role {
-    CoOwner = "CoOwner",
-    StaffBuilder = "StaffBuilder",
-    Owner = "Owner"
+  Owner = "Owner",
+  CoOwner = "CoOwner",
+  Staff = "Staff",
+  Builder = "Builder",
 }
+
+/** User account status. Canonical source of truth is ../types.ts. */
+export enum UserStatus {
+  Active = "Active",
+  Suspended = "Suspended",
+}
+
+/** Internal Caffeine framework role (separate from staff Role above). */
 export enum UserRole {
-    admin = "admin",
-    user = "user",
-    guest = "guest"
+  admin = "admin",
+  user = "user",
+  guest = "guest",
 }
-export interface DiscordSessionData {
-    token: string;
-    discordId: string;
-    username: string;
-    avatar: string;
-    role: string;
-    createdAt: bigint;
+
+// ============================================================
+// Result type (as returned by the Backend wrapper in backend.ts)
+// ============================================================
+
+/** Successful result variant. */
+export interface ResultOk<T> {
+  __kind__: "ok";
+  ok: T;
 }
-export type Result_8 = {
-    __kind__: "ok";
-    ok: DiscordSessionData;
-} | {
-    __kind__: "err";
-    err: string;
-};
+
+/** Error result variant. */
+export interface ResultErr {
+  __kind__: "err";
+  err: string;
+}
+
+export type Result<T> = ResultOk<T> | ResultErr;
+
+// ============================================================
+// Domain types
+// ============================================================
+
+/** Public-facing user record (no password hash). */
+export interface PublicUser {
+  id: bigint;
+  username: string;
+  role: Role;
+  status: UserStatus;
+  createdAt: bigint;
+}
+
+/** Session data returned on successful login. */
+export interface SessionData {
+  token: string;
+  userId: bigint;
+  username: string;
+  role: Role;
+  createdAt: bigint;
+  expiresAt: bigint;
+}
+
+/** Immutable audit log entry. */
+export interface AuditLogEntry {
+  id: bigint;
+  actorId: bigint;
+  action: string;
+  performedBy: string;
+  targetUser: string | null;
+  details: string;
+  timestamp: bigint;
+}
+
+/** A failed login attempt record. */
+export interface FailedLoginAttempt {
+  username: string;
+  timestamp: bigint;
+}
+
+/** Webhook configuration (single punishment webhook URL). */
+export interface WebhookSettings {
+  punishmentWebhookUrl: string;
+}
+
+/** Leave-of-absence request. */
+export interface LOARequest {
+  id: bigint;
+  ign: string;
+  discordUsername: string;
+  leaveDate: string;
+  returnDate: string;
+  submittedBy: string;
+  timestamp: bigint;
+  active: boolean;
+}
+
+/** Full punishment record (replaces legacy PunishmentLog). */
+export interface PunishmentRecord {
+  id: bigint;
+  playerIGN: string;
+  altAccounts: string[];
+  category: string;
+  offenseNumber: bigint;
+  duration: string;
+  reason: string;
+  proofUrl: string;
+  issuedBy: string;
+  timestamp: bigint;
+  appealed: boolean;
+  appealId: bigint | null;
+}
+
+// ============================================================
+// Backend interface — all methods on the Motoko canister
+// ============================================================
+
 export interface backendInterface {
-    assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
-    changePassword(oldPassword: string, newPassword: string): Promise<Result_1>;
-    createStaffAccount(userPrincipal: Principal, username: string, passwordHash: string, role: Role): Promise<Result_7>;
-    deactivateLOA(loaId: bigint): Promise<Result_1>;
-    discordCallback(code: string, redirectUri: string): Promise<Result_8>;
-    discordLogout(token: string): Promise<void>;
-    dummyTransform(input: TransformationInput): Promise<TransformationOutput>;
-    getActiveLOACount(): Promise<bigint>;
-    getAllLOARequests(): Promise<Result_6>;
-    getAllPunishmentLogs(): Promise<Result_5>;
-    getAllUsers(): Promise<Result_4>;
-    getCallerUserProfile(): Promise<UserProfile | null>;
-    getCallerUserRole(): Promise<UserRole>;
-    getCurrentUser(): Promise<Result_2>;
-    getDiscordSession(token: string): Promise<DiscordSessionData | null>;
-    getPunishmentLogCount(): Promise<bigint>;
-    getUserProfile(user: Principal): Promise<UserProfile | null>;
-    getWebhookConfig(): Promise<Result_3>;
-    initializeBackend(didSeed: string): Promise<void>;
-    isCallerAdmin(): Promise<boolean>;
-    login(username: string, password: string): Promise<Result_2>;
-    logout(): Promise<Result_1>;
-    promoteUser(userPrincipal: Principal, newRole: Role): Promise<Result_1>;
-    removeStaffAccount(userPrincipal: Principal): Promise<Result_1>;
-    saveCallerUserProfile(profile: UserProfile): Promise<void>;
-    setWebhookConfig(punishmentUrl: string, loaUrl: string): Promise<Result_1>;
-    submitLOARequest(ign: string, discordUsername: string, leaveDate: string, returnDate: string): Promise<Result>;
-    submitPunishmentLog(ign: string, rnd: string, offenseNumber: bigint, proof: string): Promise<Result>;
+  // ── Authentication (no session token required) ─────────────────────────
+
+  /** Hash the password with SHA-256 before calling. Returns a session token. */
+  loginWithCredentials(
+    username: string,
+    passwordHash: string
+  ): Promise<Result<SessionData>>;
+
+  /** Validate a stored session token and return the associated user. */
+  validateSession(token: string): Promise<Result<PublicUser>>;
+
+  /** Invalidate a session token server-side. */
+  logoutSession(token: string): Promise<void>;
+
+  // ── User management (session token required as first arg) ──────────────
+
+  /** Owner/CoOwner only: create a new staff account. Returns the new user ID. */
+  createUser(
+    token: string,
+    username: string,
+    passwordHash: string,
+    role: Role
+  ): Promise<Result<bigint>>;
+
+  /** Owner only: permanently remove a staff account. */
+  removeUser(token: string, targetUsername: string): Promise<Result<null>>;
+
+  /** Owner only: suspend a staff account. Suspended users cannot log in. */
+  suspendUser(token: string, targetUsername: string): Promise<Result<null>>;
+
+  /** Owner only: reactivate a suspended staff account. */
+  activateUser(token: string, targetUsername: string): Promise<Result<null>>;
+
+  /** Owner only: change the role of a staff member. */
+  updateUserRole(
+    token: string,
+    targetUsername: string,
+    newRole: Role
+  ): Promise<Result<null>>;
+
+  /** Any authenticated user: change own password. */
+  changePassword(
+    token: string,
+    oldPasswordHash: string,
+    newPasswordHash: string
+  ): Promise<Result<null>>;
+
+  /** Owner/CoOwner: list all staff accounts. */
+  getAllUsers(token: string): Promise<Result<PublicUser[]>>;
+
+  // ── Audit log ──────────────────────────────────────────────────────────
+
+  /** Owner only: retrieve the full audit log. */
+  getAuditLog(token: string): Promise<Result<AuditLogEntry[]>>;
+
+  /** Owner only: retrieve all failed login attempts. */
+  getFailedLoginAttempts(token: string): Promise<Result<FailedLoginAttempt[]>>;
+
+  // ── Webhook configuration ──────────────────────────────────────────────
+
+  /** Owner only: read current webhook settings. */
+  getWebhookConfig(token: string): Promise<Result<WebhookSettings>>;
+
+  /** Owner only: set the punishment webhook URL. */
+  setWebhookConfig(
+    token: string,
+    punishmentUrl: string
+  ): Promise<Result<null>>;
+
+  // ── Leave-of-absence ───────────────────────────────────────────────────
+
+  /** Any authenticated user: submit an LOA request. Returns the new LOA ID. */
+  submitLOARequest(
+    token: string,
+    ign: string,
+    discordUsername: string,
+    leaveDate: string,
+    returnDate: string
+  ): Promise<Result<bigint>>;
+
+  /** Owner/CoOwner: retrieve all LOA requests. */
+  getAllLOARequests(token: string): Promise<Result<LOARequest[]>>;
+
+  /** Owner/CoOwner: mark an LOA as deactivated (staff returned). */
+  deactivateLOA(token: string, loaId: bigint): Promise<Result<null>>;
+
+  // ── Punishments ────────────────────────────────────────────────────────
+
+  /** Any authenticated user: submit a punishment log. Returns the new record ID. */
+  submitPunishmentLog(
+    token: string,
+    playerIGN: string,
+    category: string,
+    offenseNumber: bigint,
+    duration: string,
+    reason: string,
+    proofUrl: string,
+    altAccounts: string[]
+  ): Promise<Result<bigint>>;
+
+  /** Any authenticated user: retrieve all punishment records. */
+  getAllPunishmentLogs(token: string): Promise<Result<PunishmentRecord[]>>;
+
+  /** Public: total count of punishment records (no auth required). */
+  getPunishmentLogCount(): Promise<bigint>;
+
+  // ── Caffeine MixinAuthorization framework ──────────────────────────────
+
+  /** Called once during canister initialization with the admin secret. */
+  _initializeAccessControlWithSecret(secret: string): Promise<void>;
+
+  /** Return the Caffeine UserRole of the current Internet Identity caller. */
+  getCallerUserRole(): Promise<UserRole>;
+
+  /** Assign a Caffeine UserRole to a principal (admin only). */
+  assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
+
+  /** Return true if the current Internet Identity caller has admin access. */
+  isCallerAdmin(): Promise<boolean>;
 }

@@ -1,77 +1,74 @@
-# Lucky Block Survival 4 — Staff Portal
+# Lucky Block Survival 4 — Backend Hardening
 
 ## Current State
 
-The app is a Minecraft staff management dashboard with:
-- Discord OAuth2 authentication (broken — `actor.discordCallback is not a function` error persisting across 10+ fix attempts)
-- Role system using 3 roles: `Owner`, `CoOwner`, `StaffBuilder` (Staff and Builder merged — incorrect)
-- Frontend-only auth via `staffAccounts.ts` localStorage (the actual working auth layer)
-- Backend contains Discord constants (CLIENT_SECRET, BOT_TOKEN) stored in plain code
-- HTTP outcalls used for Discord OAuth and webhook APIs
-- No suspension system
-- No session system — no server-side session validation
-- localStorage-based punishment logs, LOA, and appeals (portalData.ts)
-- Webhook sending done from frontend (discordWebhook.ts)
+- `main.mo` has a `requireSession(token)` private helper that validates sessions but is structurally inconsistent: some functions call it via nested `switch`, some functions (like `logoutSession`) skip it entirely, audit logging is missing from most functions, and role checks use ad-hoc `isOwnerRole`/`isCoOwnerOrAbove` helpers instead of a systematic hierarchy.
+- `AuditLogEntry` type lacks `actorId` (who performed the action by ID).
+- Expired sessions are only removed one-at-a-time on access, not batch-purged.
+- No session rotation on login (old tokens stay alive when a new login occurs).
+- Sessions are NOT invalidated when a user is suspended or their role changes.
+- `backend.did.d.ts`, `backend.d.ts`, and `backend.ts` are completely stale — generated from the Discord-era codebase (v17). They declare methods like `login`, `logout`, `discordCallback`, `createStaffAccount`, `promoteUser`, `removeStaffAccount` that do not exist in the current backend, and are missing all the real current methods.
+- `Role` enum in `backend.did.d.ts` uses `StaffBuilder` instead of the correct `Staff`/`Builder` variants.
+- `PublicUser` in bindings lacks the `status` field.
+- `WebhookConfig` in bindings has 2 fields (`loaWebhookUrl`) but the current backend only has 1 (`punishmentWebhookUrl`).
+- Frontend `AuthContext.tsx` already uses `as any` casts to call the real backend methods (`loginWithCredentials`, `validateSession`, `logoutSession`) as a workaround for the stale bindings.
+- Frontend `useActor.ts` still calls `actor._initializeAccessControlWithSecret` on every actor creation.
 
 ## Requested Changes (Diff)
 
 ### Add
-- Custom authentication: `loginWithCredentials(username, passwordHash)` → backend session token
-- Session system: `sessions` Map (token → SessionData), 7-day expiry, validated on every request
-- `validateSession(token)` → PublicUser (called on every app load)
-- `logoutSession(token)` → removes session
-- `UserStatus` type: `#Active | #Suspended`
-- `suspendUser(token, username)` — Owner only, logged in audit log
-- `activateUser(token, username)` — Owner only, logged in audit log
-- Failed login logging: username + timestamp stored in backend
-- Audit log: action, performedBy, targetUser, details, timestamp
-- Stub types for future systems: PunishmentRecord, Appeal, Strike (with per-category + escalation fields)
-- 4-role enum: `Owner > CoOwner > Staff > Builder`
-- `createUser`, `removeUser`, `updateUserRole`, `changePassword` — session-token authenticated
-- Username/password login form in frontend
-- Session token stored in localStorage, validated against backend on app load
+- `rolePower(role)` — maps Role to Nat power level: Owner=100, CoOwner=75, Staff=50, Builder=50. Staff and Builder are peers (equal power).
+- `requireRole(user, requiredRole)` — returns `Result<(), Text>`. Checks if `rolePower(user.role) >= rolePower(requiredRole)`. Used in every protected function.
+- `canActOn(caller, target)` — returns Bool. True only when `rolePower(caller) > rolePower(target)`. Prevents peer-on-peer and upward modification.
+- `canAssignRole(caller, newRole)` — returns Bool. True only when `rolePower(caller) > rolePower(newRole)`. Prevents self-promotion and assigning equal roles.
+- `purgeExpiredSessions()` — scans all sessions in stable memory and removes every expired entry. Called at the top of `requireAuth`.
+- `revokeUserSessions(username)` — removes all sessions belonging to a specific username. Called on suspend, role change, account removal, and password change.
+- `requireAuth(token)` — the single, centralized auth gate (replaces `requireSession`). Steps: (1) purge expired sessions, (2) validate token existence, (3) fetch live user from stable memory, (4) reject suspended users and revoke their sessions. Returns `Result<StaffUser, Text>`.
+- `addAudit(actorId, action, by, target, details)` — central audit recorder with `actorId : UserId` included. Every mutating function calls this as its last step.
+- Session rotation on login: `loginWithCredentials` revokes all prior sessions for the user before issuing a new token.
+- Migration stub for `AuditLogEntry` v31 (old schema without `actorId`) — absorbs stable data under old variable names `auditLogStore`/`auditCounter`.
+- New `auditLog : Map<Nat, AuditLogEntry>` and `auditId : Nat` with the updated schema.
+- `statusToText(status)` utility.
 
 ### Modify
-- `Role` enum: split `#StaffBuilder` into `#Staff` and `#Builder`
-- `PublicUser` type: add `status: UserStatus` field
-- `users` Map: change key from `Principal` to `Text` (username)
-- `submitLOARequest`, `getAllLOARequests`, `deactivateLOA` — add `token` param for session auth
-- `submitPunishmentLog` — add `token` param, expand fields to match enhanced PunishmentRecord model
-- All pages: fix `Role.StaffBuilder` references to check `Role.Staff` and `Role.Builder` separately
-- `AdminPanelPage`: add suspend/activate UI, show status badges, fix role names
-- `Layout.tsx`: remove Discord avatar URL, replace with initials avatar
-- `AuthContext.tsx`: replace Discord session logic with backend session token logic
-- `LoginPage.tsx`: replace Discord OAuth button with username/password form
-- `App.tsx`: remove callback page detection
+- `AuditLogEntry` — add `actorId : UserId` field.
+- `createUser` — enforces `requireRole(caller, #Owner)` + `canAssignRole` check. No Owner-level accounts can be created.
+- `removeUser` — enforces `requireRole(caller, #Owner)` + `canActOn`. Revokes target's sessions before removal.
+- `suspendUser` — relaxed to `requireRole(caller, #CoOwner)` + `canActOn`. Revokes all sessions for suspended user immediately.
+- `activateUser` — relaxed to `requireRole(caller, #CoOwner)` + `canActOn`.
+- `updateUserRole` — enforces `requireRole(caller, #Owner)` + self-change prevention + `canActOn` + `canAssignRole`. Revokes target's sessions after role change (forces re-login).
+- `changePassword` — after successful change, revokes all sessions for the user (forces re-login with new credentials).
+- `getAllUsers` — uses `requireRole(caller, #CoOwner)` instead of ad-hoc check.
+- `getAuditLog` — uses `requireRole(caller, #CoOwner)`.
+- `getFailedLoginAttempts` — uses `requireRole(caller, #Owner)`.
+- `setWebhookConfig` — uses `requireRole(caller, #Owner)`.
+- `submitPunishmentLog` — adds `requireRole(caller, #Staff)` check and full audit log entry.
+- `deactivateLOA` — adds audit log entry.
+- `submitLOARequest` — adds audit log entry.
+- All mutating public functions: strict pattern — requireAuth → requireRole → validate → execute → audit.
 
 ### Remove
-- `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_BOT_TOKEN`, `DISCORD_GUILD_ID`, role ID constants
-- `DiscordSessionData` type and all Discord session functions
-- `discordCallback`, `getDiscordSession`, `discordLogout` backend functions
-- `discordSessions` Map state
-- `OutCall` import (http-outcalls — only used for Discord API calls)
-- `sendDiscordPunishmentWebhook`, `sendDiscordLOAWebhook` backend functions (frontend handles webhooks)
-- `CallbackPage.tsx` (Discord OAuth callback handler)
-- `SiDiscord` icon and `react-icons/si` Discord import in LoginPage
-- `getDiscordAvatarUrl`, `discordUserToPublicUser`, Discord session helpers in AuthContext
-- `discordUser` state and Discord-specific session types in AuthContext
+- `isOwnerRole(role)` helper (replaced by `requireRole`).
+- `isCoOwnerOrAbove(role)` helper (replaced by `requireRole`).
+- `requireSession(token)` (renamed/replaced by `requireAuth`).
+- `import Order` (no longer needed — `Role.compare`/`Role.priority` module removed).
+- `import Runtime` from main.mo (only used in MixinAuthorization.mo).
+- `module Role { priority, compare }` block (replaced by `rolePower`).
 
 ## Implementation Plan
 
-1. **Rewrite `src/backend/main.mo`**: Remove all Discord code, fix Role enum (4 roles), add UserStatus, rewrite auth with session tokens, add suspension + audit log, add stub types for future systems, update all function signatures to use `token: Text` param.
+1. **main.mo** — Full structured rewrite:
+   - Move `auditLogStore`/`auditCounter` into migration stubs section (type becomes `_V31AuditLogEntry` to absorb old stable data).
+   - Add new `auditLog : Map<Nat, AuditLogEntry>` and `auditId : Nat` in new state section.
+   - Remove `module Role`, `isOwnerRole`, `isCoOwnerOrAbove`.
+   - Add `rolePower`, `requireRole`, `canActOn`, `canAssignRole` in new RBAC Core section.
+   - Add `purgeExpiredSessions`, `revokeUserSessions`, `requireAuth` in Session Core section.
+   - Update `addAudit` signature to include `actorId`.
+   - Update `loginWithCredentials` to call `revokeUserSessions` before issuing new token.
+   - Update all 14 protected public functions to follow the strict pattern.
 
-2. **Rewrite `src/frontend/src/contexts/AuthContext.tsx`**: Replace Discord session logic with backend session token pattern. `login()` calls `actor.loginWithCredentials()`, stores token. On mount: calls `actor.validateSession(token)`. `logout()` calls `actor.logoutSession(token)`.
-
-3. **Rewrite `src/frontend/src/pages/LoginPage.tsx`**: Replace Discord OAuth button with username/password form. Keep staff rules scroll box and agreement checkbox. Professional white/yellow theme.
-
-4. **Update `src/frontend/src/App.tsx`**: Remove Discord callback URL detection, simplify to just check if user is authenticated.
-
-5. **Delete `src/frontend/src/pages/CallbackPage.tsx`**: No longer needed.
-
-6. **Update all pages using `Role.StaffBuilder`**: Replace with checks for `Role.Staff` or `Role.Builder` where appropriate. Update display names and badge classes.
-
-7. **Update `src/frontend/src/components/Layout.tsx`**: Remove `getDiscordAvatarUrl`, replace with initials avatar component.
-
-8. **Update `src/frontend/src/pages/AdminPanelPage.tsx`**: Fix role display (4 roles), add suspend/activate user buttons (Owner only), show status badges.
-
-9. **Update `src/frontend/src/lib/staffAccounts.ts`**: Fix Role enum to use 4-role system, keep as local cache layer.
+2. **Frontend bindings (delegated to frontend agent)**:
+   - Rewrite `backend.d.ts` to declare the real current API (token-based, correct types, correct Role enum).
+   - Remove dead method stubs from `backendInterface` and `Backend` class that reference non-existent backend functions.
+   - Update `useActor.ts` to remove the Internet Identity + `_initializeAccessControlWithSecret` initialization.
+   - Ensure any page-level backend calls pass the session token correctly.
